@@ -13,6 +13,7 @@ All stats are **EUW, Emerald+ ranked solo/duo, current patch**, from OP.GG.
 - `page.html` is the whole front end (no build step). It's bundled into the Worker as a text module.
 - **Data:** the JSON op.gg's own EUW pages load (`lol-api-champion.op.gg/api/EUW/...`). If that fails, the Worker switches to OP.GG's official MCP feed (all regions), and the page says "all regions" instead of "EUW".
 - **Icons and names:** Riot Data Dragon.
+- **Builds kept ready:** a cron (`*/10 * * * *`) runs `warm()`, which refreshes the 10 oldest champion/role builds from op.gg and stores them in KV (binding `DATA`, namespace `champ-build-data`): one `chunk:*` value per run, an `idx` pointing each `Champion:role` at its chunk, and the tier list as `tl`. `/api/build` serves a stored build if it is under 12 h old, so a click doesn't wait on op.gg. A full cycle of every champion and role takes about 4–5 hours. Under 500 KV writes a day, within the free plan.
 - **Caching:** EUW results are cached for 6 h (builds) and 3 h (tier list). Backup results are cached for only 10 min, so EUW comes back quickly after a blip.
 - **Domain:** the Cloudflare Pages project `lomsland-build` forwards every request to the Worker through a service binding, with `build.xn--lmsland-q1a.no` as its custom domain. DNS is a CNAME at Webnode: `build.xn--lmsland-q1a.no → lomsland-build.pages.dev`.
 
@@ -38,7 +39,10 @@ Upload both files to the Worker. The Pages project picks up the change by itself
 
 ```
 PUT /accounts/{account_id}/workers/scripts/champ-build   (multipart)
-  metadata  = {"main_module":"worker.js","compatibility_date":"2025-01-01"}
+  metadata  = {"main_module":"worker.js","compatibility_date":"2025-01-01",
+               "bindings":[{"type":"kv_namespace","name":"DATA","namespace_id":"8a21fd198bf540f4ae94cf1f9d2b488e"}]}
   worker.js = application/javascript+module
   page.html = text/plain
 ```
+
+Always include the KV binding in the metadata, or the stored builds stop being used. The cron schedule is set once with `PUT /accounts/{account_id}/workers/scripts/champ-build/schedules` and body `[{"cron":"*/10 * * * *"}]`.
