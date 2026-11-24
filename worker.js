@@ -8,6 +8,7 @@ const TIER = 'emerald_plus';
 const TTL = 6 * 3600; // seconds; builds change slowly within a patch
 const POSITIONS = ['top', 'jungle', 'mid', 'adc', 'support'];
 
+let KV = null; // Cloudflare KV (binding DATA): builds kept ready by the background refresh
 const mem = new Map();
 const memGet = k => { const h = mem.get(k); return h && h.exp > Date.now() ? h.v : undefined; };
 const memSet = (k, v, sec) => { if (mem.size > 2000) mem.clear(); mem.set(k, { v, exp: Date.now() + sec * 1000 }); };
@@ -219,8 +220,9 @@ export function shapeWeb(j, list, N) {
     summs: arr(d.summoner_spells).slice(0, 2).map(x => ({ ids: arr(x.ids).map(Number), wr: x.play ? x.win / x.play : null, pick: rate(x.pick_rate), play: x.play || 0 })).filter(x => x.ids.length),
   };
 }
-async function tierList() {
-  let v = memGet('tl4'); if (v) return v;
+async function tierList(fresh) {
+  let v = !fresh && memGet('tl4'); if (v) return v;
+  if (KV && !fresh) { try { const s = await KV.get('tl', { type: 'json', cacheTtl: 300 }); if (s && s.region === 'EUW' && Date.now() - s.updated < 3 * 3600e3) { memSet('tl4', s, 600); return s; } } catch {} }
   const dd = await ddragon();
   try {
     const j = await web(`?tier=${TIER}`);
@@ -326,12 +328,67 @@ async function analysisWeb(champ, position, dd) {
   return v;
 }
 
+// ---- builds kept ready in KV ----
+// A cron runs warm() every 10 minutes: it refreshes the WARM_BATCH champion/role builds that are oldest (or missing),
+// stores them together in one KV value (a "chunk") and points the index at it. Reading a build is then
+// two small KV reads instead of a round trip to op.gg.
+const WARM_BATCH = 10;
+const STORED_MAX_AGE = 12 * 3600e3;
+export async function warm(env) {
+  if (!env || !env.DATA) return { skipped: 'no KV' };
+  KV = env.DATA;
+  const tl = await tierList(true); // op.gg's latest, not the stored copy
+  if (tl.region !== 'EUW') return { skipped: 'op.gg EUW unavailable' };
+  const prev = await env.DATA.get('tl', { type: 'json' });
+  if (!prev || prev.opggAt !== tl.opggAt || Date.now() - prev.updated > 3600e3) await env.DATA.put('tl', JSON.stringify(tl), { expirationTtl: 2 * 86400 });
+  const idx = (await env.DATA.get('idx', { type: 'json' })) || {};
+  const combos = [];
+  for (const [p, list] of Object.entries(tl.roles)) for (const e of list) if (e.id) combos.push(e.id + ':' + p);
+  const due = combos.map(k => [k, (idx[k] && idx[k].at) || 0]).sort((a, b) => a[1] - b[1]).slice(0, WARM_BATCH).map(x => x[0]);
+  const dd = await ddragon(), got = {};
+  await Promise.all(due.map(async k => {
+    const [id, p] = k.split(':'), champ = dd.list.find(c => c.id === id);
+    if (!champ) return;
+    try { const b = await build(champ.name, p); if (b.region === 'EUW') got[k] = b; } catch {}
+  }));
+  const keys = Object.keys(got), now = Date.now(), live = new Set(combos);
+  for (const k of Object.keys(idx)) if (!live.has(k)) delete idx[k];
+  if (keys.length) {
+    const cid = 'chunk:' + now.toString(36);
+    await env.DATA.put(cid, JSON.stringify(got), { expirationTtl: 2 * 86400 });
+    for (const k of keys) idx[k] = { c: cid, at: now };
+  }
+  // champions op.gg had nothing for are tried again later, after the others
+  for (const k of due) if (!got[k]) idx[k] = { ...(idx[k] || {}), at: now - 6 * 3600e3 };
+  await env.DATA.put('idx', JSON.stringify(idx));
+  return { refreshed: keys.length, due: due.length, total: combos.length, stored: Object.values(idx).filter(x => x.c).length };
+}
+// A stored build for this champion (and role, or its most played role), if the refresh has one that is fresh enough.
+export async function stored(cName, pos) {
+  if (!KV) return null;
+  const q = norm(cName || ''); if (!q) return null;
+  const [tl, idx] = await Promise.all([KV.get('tl', { type: 'json', cacheTtl: 300 }), KV.get('idx', { type: 'json', cacheTtl: 60 })]);
+  if (!tl || !idx) return null;
+  let id = '', best = 0, role = POSITIONS.includes(pos) ? pos : '';
+  for (const [p, list] of Object.entries(tl.roles || {})) for (const e of list) {
+    if (norm(e.name) !== q && norm(e.id) !== q) continue;
+    id = e.id;
+    if (!POSITIONS.includes(pos) && e.play > best) { best = e.play; role = p; }
+  }
+  const ref = id && role && idx[id + ':' + role];
+  if (!ref || !ref.c || Date.now() - ref.at > STORED_MAX_AGE) return null;
+  const chunk = await KV.get(ref.c, { type: 'json', cacheTtl: 300 });
+  const b = chunk && chunk[id + ':' + role];
+  return b ? { ...b, opggAt: tl.opggAt || b.opggAt } : null;
+}
+
 const json = (obj, status = 200, maxAge = 0) => new Response(JSON.stringify(obj), {
   status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': maxAge ? `public, max-age=${maxAge}` : 'no-store' },
 });
 
 export default {
   async fetch(request, env, ctx) {
+    KV = (env && env.DATA) || null;
     const url = new URL(request.url);
     if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405 });
     if (url.pathname === '/' || url.pathname === '/index.html') {
@@ -360,7 +417,7 @@ export default {
       const key = new Request(`https://cache.champ-build/v10/${encodeURIComponent(norm(c))}/${POSITIONS.includes(p) ? p : 'auto'}`);
       if (cache) { const hit = await cache.match(key); if (hit) return hit; }
       try {
-        const data = await build(c, p), res = json(data, 200, 600);
+        const data = (await stored(c, p).catch(() => null)) || (await build(c, p)), res = json(data, 200, 600);
         if (cache) { const store = res.clone(); store.headers.set('cache-control', `public, max-age=${data.region === 'EUW' ? TTL : 600}`); ctx && ctx.waitUntil ? ctx.waitUntil(cache.put(key, store)) : await cache.put(key, store); }
         return res;
       } catch (e) {
@@ -368,5 +425,8 @@ export default {
       }
     }
     return new Response('Not found', { status: 404 });
+  },
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(warm(env).catch(() => {}));
   },
 };

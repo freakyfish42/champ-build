@@ -152,6 +152,7 @@ globalThis.fetch = async (url, init) => {
   if (url.includes('lol-api-champion.op.gg')) {
     webCalls.push(url);
     if (!webUp) return { ok: false, status: 503, json: async () => ({}) };
+    if (/\/ranked\?tier=/.test(url)) return { ok: true, status: 200, json: async () => ({ data: [{ id: 122, positions: [{ name: 'TOP', stats: { play: 19564, win_rate: 0.51, pick_rate: 0.07, ban_rate: 0.18, tier_data: { tier: 1, rank: 2, rank_prev: 2 } } }] }, { id: 412, positions: [{ name: 'SUPPORT', stats: { play: 30000, win_rate: 0.51, pick_rate: 0.1, ban_rate: 0.1, tier_data: { tier: 1, rank: 1, rank_prev: 1 } } }] }], meta: { version: '16.23', analyzed_at: '2026-11-25T03:25:34+09:00' } }) };
     if (url.includes('/122/TOP')) return { ok: true, status: 200, json: async () => DARIUS };
     if (url.includes('/412/SUPPORT')) return { ok: true, status: 200, json: async () => ({ data: { summary: { positions: [{ name: 'SUPPORT', stats: { play: 30000, win_rate: 0.51, role_rate: 0.99 } }] }, starter_items: [{ ids: [2003, 2003], play: 29288, win: 14963, pick_rate: 0.9793 }], core_items: [{ ids: [3190], play: 10, win: 5, pick_rate: 0.1 }] } }) };
     return { ok: false, status: 404, json: async () => ({}) };
@@ -219,4 +220,25 @@ assert.equal(d11.runes[0].keys[0].name, 'Phase Rush'); assert.equal(d11.runes[0]
 assert.equal(d11.opggAt, undefined, 'op.gg cached_at is not a processing time; the tier list here is the backup, so no time'); assert.ok(d11.updated > 0); t++;
 assert.equal(d11.skills.pick, 0.3645); assert.equal(d11.boots.items[0].name, 'Plated Steelcaps'); assert.equal(d11.counters.weak[0].name, 'Kled'); t++;
 
+// ---- builds kept ready in KV: background refresh, then clicks served from storage even if op.gg is down ----
+{
+  const W2 = await import(join(tmp, 'w.mjs') + '?fresh');
+  const store = new Map(), puts = [];
+  const DATA = { get: async (k, o) => { const v = store.get(k); return v == null ? null : (o && o.type === 'json' ? JSON.parse(v) : v); }, put: async (k, v) => { puts.push(k); store.set(k, v); } };
+  webUp = true;
+  const r1 = await W2.warm({ DATA });
+  assert.equal(r1.refreshed, 2); assert.equal(r1.total, 2); assert.equal(r1.stored, 2);
+  assert.ok(store.has('tl') && store.has('idx')); assert.equal(puts.filter(k => k.startsWith('chunk:')).length, 1, 'one chunk write per run'); t++;
+  webUp = false; webCalls.length = 0;
+  const get2 = async path => { const r = await W2.default.fetch(new Request('https://x' + path), { DATA }, { waitUntil() {} }); return [r.status, await r.json()]; };
+  const [s1, d1] = await get2('/api/build?c=darius');
+  assert.equal(s1, 200); assert.equal(d1.region, 'EUW'); assert.equal(d1.position, 'top'); assert.equal(d1.summs.length, 2);
+  assert.equal(d1.opggAt, Date.parse('2026-11-24T18:25:34Z'));
+  const [s2, d2] = await get2('/api/build?c=Thresh&p=support');
+  assert.equal(s2, 200); assert.equal(d2.starter.items[0].name, 'World Atlas');
+  assert.equal(webCalls.length, 0, 'stored builds need no op.gg request'); t++;
+  // the second run refreshes the oldest first and keeps the index tidy
+  webCalls.length = 0; webUp = true; const r2 = await W2.warm({ DATA }); assert.ok(webCalls.some(u => /\/ranked\?tier=/.test(u)), 'the refresh always asks op.gg for the latest tier list'); assert.equal(r2.refreshed, 2); assert.equal(puts.filter(k => k.startsWith('chunk:')).length, 2); t++;
+  assert.equal(await W2.stored('nobody', ''), null); t++;
+}
 console.log(`ok: ${t} checks passed`);
