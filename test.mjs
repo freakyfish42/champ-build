@@ -89,6 +89,8 @@ const DARIUS = { data: {
   last_items: [{ ids: [3142], play: 10906, win: 5661, pick_rate: 0.6222 }, { ids: [3742], play: 9839, win: 5352, pick_rate: 0.5614 }, { ids: [3047], play: 9000, win: 4600, pick_rate: 0.5 }, { ids: [3071], play: 5000, win: 2600, pick_rate: 0.3 }],
   skill_masteries: [{ ids: ['Q', 'E', 'W'], play: 13053, win: 7210, pick_rate: 0.9557, builds: [{ order: ['W','Q','E','Q','Q','R','Q','E','Q','E','R','E','E','W','W'], play: 4758, win: 2598, pick_rate: 0.3645 }] }],
   skills: [{ order: ['W'], play: 4758, win: 2598, pick_rate: 0.3484 }],
+  rune_pages: [{ id: 8230, primary_page_id: 8200, secondary_page_id: 8000, play: 7322, win: 3744, pick_rate: 0.4188, builds: [{ primary_rune_ids: [8230, 8226, 8210, 8237], secondary_rune_ids: [9104, 8299], stat_mod_ids: [5005, 5008, 5011], play: 5417, win: 2768, pick_rate: 0.7398 }] },
+    { id: 8010, primary_page_id: 8000, secondary_page_id: 8200, play: 5447, win: 2806, pick_rate: 0.3116, builds: [{ primary_rune_ids: [8010, 9111, 9104, 8299], secondary_rune_ids: [8224, 8237], stat_mod_ids: [5005, 5008, 5011], play: 3279, win: 1680, pick_rate: 0.602 }] }, { id: 1, primary_page_id: 8100, secondary_page_id: 8000, play: 5, win: 1, pick_rate: 0.01, builds: [] }],
   counters: [{ champion_id: 240, play: 149, win: 56 }, { champion_id: 103, play: 300, win: 180 }, { champion_id: 62, play: 12, win: 1 }],
 }, meta: { version: '16.23' } };
 ok('EUW champion shape', () => {
@@ -97,6 +99,7 @@ ok('EUW champion shape', () => {
   assert.equal(s.summs.length, 2); assert.deepEqual(s.summs[0].ids, [4, 6]); assert.equal(s.summs[0].pick, 0.5921); assert.equal(s.summs[1].play, 5239);
   assert.equal(s.skills.pick, 0.3645); assert.equal(s.skills.play, 4758); assert.deepEqual(s.max.order, ['Q', 'E', 'W']);
   assert.equal(s.boots.items[0].name, 'Plated Steelcaps'); assert.equal(s.boots2.items[0].id, 3111); assert.equal(s.boots2.pick, 0.2719); assert.equal(s.starter.pick, 0.7193); assert.deepEqual(s.late.map(x => x.items[0].id), [3071], 'core items and boots are left out of other popular items');
+  assert.equal(s.runes.length, 2); assert.equal(s.runes[0].pick, 0.4188); assert.equal(s.runes[0].play, 7322); assert.deepEqual(s.runes[0].keys, [8230, 8226, 8210, 8237]); assert.deepEqual(s.runes[1].subs, [8224, 8237]);
   assert.equal(s.counters.weak[0].name, 'Kled'); assert.ok(Math.abs(s.counters.weak[0].wr - 56 / 149) < 1e-12);
   assert.equal(s.counters.strong[0].name, 'Ahri'); assert.equal(s.counters.weak.length, 2, 'matchups under 40 games are skipped');
 });
@@ -138,6 +141,7 @@ globalThis.fetch = async (url, init) => {
   const j = o => ({ json: async () => o, text: async () => JSON.stringify(o) });
   if (url.endsWith('versions.json')) return j(['15.23.1']);
   if (url.endsWith('/champion.json')) return j({ data: { Ahri: { id: 'Ahri', name: 'Ahri', key: '103' }, Pantheon: { id: 'Pantheon', name: 'Pantheon', key: '80' }, Mel: { id: 'Mel', name: 'Mel', key: '800' }, MonkeyKing: { id: 'MonkeyKing', name: 'Wukong', key: '62' }, Darius: { id: 'Darius', name: 'Darius', key: '122' }, Thresh: { id: 'Thresh', name: 'Thresh', key: '412' }, Kled: { id: 'Kled', name: 'Kled', key: '240' } } });
+  if (url.endsWith('/runesReforged.json')) return j([{ id: 8200, name: 'Sorcery', icon: 'perk-images/Styles/7202_Sorcery.png', slots: [{ runes: [{ id: 8230, name: 'Phase Rush', icon: 'perk-images/Styles/Sorcery/PhaseRush/PhaseRush.png' }] }] }, { id: 8000, name: 'Precision', icon: 'perk-images/Styles/7201_Precision.png', slots: [{ runes: [{ id: 8010, name: 'Conqueror', icon: 'c.png' }] }] }]);
   if (url.endsWith('/item.json')) return j({ data: { 3047: { name: 'Plated Steelcaps' }, 3865: { name: 'World Atlas' }, 2003: { name: 'Health Potion' }, 3142: { name: "Youmuu's Ghostblade" } } });
   if (url.endsWith('/summoner.json')) return j({ data: { SummonerFlash: { key: '4', name: 'Flash', image: { full: 'SummonerFlash.png' } }, SummonerHaste: { key: '6', name: 'Ghost', image: { full: 'SummonerHaste.png' } }, SummonerDot: { key: '14', name: 'Ignite', image: { full: 'SummonerDot.png' } } } });
   if (url.includes('lol-api-champion.op.gg')) {
@@ -206,6 +210,7 @@ assert.equal(s11, 200); assert.equal(d11.region, 'EUW'); assert.match(webCalls[0
 assert.deepEqual(d11.summs.map(x => x.spells.map(y => y.name).join('+')), ['Flash+Ghost', 'Flash+Ignite']);
 const d12 = JSON.parse((await get('/api/build?c=Thresh&p=support'))[2]);
 assert.equal(d12.region, 'EUW'); assert.deepEqual(d12.starter.items.map(i => i.name), ['World Atlas', 'Health Potion', 'Health Potion']); assert.equal(d12.starter.items[0].added, true); t++;
+assert.equal(d11.runes[0].keys[0].name, 'Phase Rush'); assert.equal(d11.runes[0].primary.name, 'Sorcery'); assert.equal(d11.runes[0].secondary.name, 'Precision'); assert.equal(d11.runes[0].shards[0].name, 'Attack Speed'); assert.equal(d11.runes[1].keys[0].name, 'Conqueror'); t++;
 assert.equal(d11.skills.pick, 0.3645); assert.equal(d11.boots.items[0].name, 'Plated Steelcaps'); assert.equal(d11.counters.weak[0].name, 'Kled'); t++;
 
 console.log(`ok: ${t} checks passed`);

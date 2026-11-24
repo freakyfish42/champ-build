@@ -99,6 +99,19 @@ async function itemNames(version) {
   return v;
 }
 
+// rune trees and runes by id, from Data Dragon (icons are paths under /cdn/img/)
+async function runeData(version) {
+  const k = 'ru:' + version; let v = memGet(k); if (v) return v;
+  v = {};
+  try {
+    const d = await (await fetch(`https://ddragon.leagueoflegends.com/cdn/${version}/data/en_US/runesReforged.json`)).json();
+    for (const t of d) { v[t.id] = { name: t.name, icon: t.icon }; for (const s of t.slots || []) for (const r of s.runes || []) v[r.id] = { name: r.name, icon: r.icon }; }
+  } catch {}
+  memSet(k, v, TTL);
+  return v;
+}
+const SHARDS = { 5001: 'Health Scaling', 5005: 'Attack Speed', 5007: 'Ability Haste', 5008: 'Adaptive Force', 5010: 'Move Speed', 5011: 'Health', 5013: 'Tenacity and Slow Resist' };
+
 // summoner spell names and icons by numeric id (4 = Flash, 14 = Ignite, ...)
 async function summs(version) {
   const k = 'su:' + version; let v = memGet(k); if (v) return v;
@@ -129,6 +142,7 @@ const BUILD_FIELDS = [
   'data.weak_counters[].{champion_name,counter_win_rate,my_win_rate,play}',
   'data.strong_counters[].{champion_name,counter_win_rate,my_win_rate,play}',
   'data.summoner_spells.{ids[],ids_names[],pick_rate,play,win}',
+  'data.runes.{pick_rate,play,primary_page_id,primary_rune_ids[],secondary_page_id,secondary_rune_ids[],stat_mod_ids[],win}',
 ];
 // OP.GG gives win rates as fractions; accept percentages too, in case that changes
 const rate = x => (typeof x === 'number' && isFinite(x) ? (x > 1 ? x / 100 : x) : null);
@@ -200,6 +214,7 @@ export function shapeWeb(j, list, N) {
     skills: sk && arr(sk.order).length ? { order: sk.order, wr: sk.play ? sk.win / sk.play : null, pick: rate(sk.pick_rate), play: sk.play || 0 } : null,
     max: sm && arr(sm.ids).length ? { order: sm.ids, wr: sm.play ? sm.win / sm.play : null, pick: rate(sm.pick_rate) } : null,
     counters: { weak: [...cs].sort((a, b) => a.wr - b.wr).slice(0, 6), strong: [...cs].sort((a, b) => b.wr - a.wr).slice(0, 6) },
+    runes: arr(d.rune_pages).slice(0, 2).map(p => { const b = arr(p.builds)[0] || p; return { primary: +p.primary_page_id, secondary: +p.secondary_page_id, keys: arr(b.primary_rune_ids).map(Number), subs: arr(b.secondary_rune_ids).map(Number), shards: arr(b.stat_mod_ids).map(Number), wr: p.play ? p.win / p.play : null, pick: rate(p.pick_rate), play: p.play || 0 }; }).filter(r => r.keys.length),
     summs: arr(d.summoner_spells).slice(0, 2).map(x => ({ ids: arr(x.ids).map(Number), wr: x.play ? x.win / x.play : null, pick: rate(x.pick_rate), play: x.play || 0 })).filter(x => x.ids.length),
   };
 }
@@ -239,13 +254,14 @@ export function shape(raw) {
     // weak = champions that beat this one; strong = champions this one beats
     counters: { weak: counters(d.weak_counters, true), strong: counters(d.strong_counters, false) },
     late: [],
+    runes: d.runes && Array.isArray(d.runes.primary_rune_ids) && d.runes.primary_rune_ids.length ? [{ primary: +d.runes.primary_page_id, secondary: +d.runes.secondary_page_id, keys: d.runes.primary_rune_ids.map(Number), subs: arr(d.runes.secondary_rune_ids).map(Number), shards: arr(d.runes.stat_mod_ids).map(Number), wr: d.runes.play ? d.runes.win / d.runes.play : null, pick: rate(d.runes.pick_rate), play: d.runes.play || 0 }] : [],
     summs: d.summoner_spells && Array.isArray(d.summoner_spells.ids) && d.summoner_spells.ids.length ? [{ ids: d.summoner_spells.ids.map(Number), wr: d.summoner_spells.play ? d.summoner_spells.win / d.summoner_spells.play : null, pick: rate(d.summoner_spells.pick_rate), play: d.summoner_spells.play || 0 }] : [],
     max: mx && Array.isArray(mx.ids) && mx.ids.length ? { order: mx.ids, wr: mx.play ? mx.win / mx.play : null, pick: mx.pick_rate ?? null } : null,
   };
 }
 
 async function analysis(champ, position) {
-  const k = `an3:${champ.id}:${position}`; let v = memGet(k); if (v) return v;
+  const k = `an4:${champ.id}:${position}`; let v = memGet(k); if (v) return v;
   let last;
   for (const name of [...new Set([ogName(champ.name), champ.id.toUpperCase()])]) {
     try {
@@ -286,12 +302,14 @@ export async function build(cName, pos) {
     const N = await itemNames(dd.version);
     a = { ...a, starter: { ...a.starter, items: [{ id: 3865, name: N[3865] || 'World Atlas', added: true }, ...a.starter.items] } };
   }
+  if (a.runes && a.runes.length) { const R = await runeData(dd.version), r1 = i => ({ id: i, name: (R[i] || {}).name || 'Rune ' + i, icon: (R[i] || {}).icon || '' });
+    a = { ...a, runes: a.runes.map(x => ({ ...x, primary: r1(x.primary), secondary: r1(x.secondary), keys: x.keys.map(r1), subs: x.subs.map(r1), shards: x.shards.map(i => ({ id: i, name: SHARDS[i] || 'Shard ' + i })) })) }; }
   if (a.summs && a.summs.length) { const S = await summs(dd.version); a = { ...a, summs: a.summs.map(x => ({ ...x, spells: x.ids.map(i => ({ id: i, name: (S[i] || {}).name || 'Spell ' + i, img: (S[i] || {}).img || '' })) })) }; }
   return { champion: champ.name, id: champ.id, version: dd.version, position, tier: TIER, region, note, ...a, spells: await spells(dd.version, champ.id), updated: Date.now() };
 }
 
 async function analysisWeb(champ, position, dd) {
-  const k = `w3:${champ.id}:${position}`; let v = memGet(k); if (v) return v;
+  const k = `w4:${champ.id}:${position}`; let v = memGet(k); if (v) return v;
   if (!champ.key || !POS_WEB[position]) throw new Error('no EUW lookup for ' + champ.name);
   const j = await web(`/${champ.key}/${POS_WEB[position]}?tier=${TIER}`);
   v = shapeWeb(j, dd.list, await itemNames(dd.version));
@@ -331,7 +349,7 @@ export default {
       const c = url.searchParams.get('c') || '', p = (url.searchParams.get('p') || '').toLowerCase();
       // shared edge cache, so repeat look-ups don't hit OP.GG
       const cache = typeof caches !== 'undefined' ? caches.default : null;
-      const key = new Request(`https://cache.champ-build/v7/${encodeURIComponent(norm(c))}/${POSITIONS.includes(p) ? p : 'auto'}`);
+      const key = new Request(`https://cache.champ-build/v8/${encodeURIComponent(norm(c))}/${POSITIONS.includes(p) ? p : 'auto'}`);
       if (cache) { const hit = await cache.match(key); if (hit) return hit; }
       try {
         const data = await build(c, p), res = json(data, 200, 600);

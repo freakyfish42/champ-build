@@ -1,6 +1,6 @@
 # Champion builds: build.lømsland.no
 
-A lean League of Legends build site for EUW. The front page is a sortable tier list of every champion by role. Click a champion to see its summoner spells (top 2 pairs), build (start, core, top 2 boots, other popular items), skill order (all 18 levels) and counters.
+A lean League of Legends build site for EUW. The front page is a sortable tier list of every champion by role. Click a champion to see its summoner spells (top 2 pairs), runes (top 2 pages), build (start, core, top 2 boots, other popular items), skill order (all 18 levels) and counters.
 
 All stats are **EUW, Emerald+ ranked solo/duo, current patch**, from OP.GG.
 
@@ -21,6 +21,7 @@ All stats are **EUW, Emerald+ ranked solo/duo, current patch**, from OP.GG.
 - The support item (World Atlas) isn't in op.gg's start stats, so the Worker adds it in front of supports' starting potions and marks it as added.
 - op.gg's skill order stops at level 15. The page fills levels 16–18 the standard way and shows those cells faded.
 - "Other popular items" are sorted by how often they're bought, not by build order. op.gg's EUW data has no 4th/5th/6th slots.
+- Runes: op.gg's two most played rune pages. Pick rate, games and win rate are for the whole page, and the runes shown are that page's most common setup. Names and icons come from Data Dragon `runesReforged.json`; stat shards are named in the Worker because Data Dragon doesn't list them.
 - Counters use every EUW matchup with at least 40 games.
 
 ## Test

@@ -88,6 +88,19 @@ button{font:inherit;color:var(--ink);cursor:pointer;min-height:40px;border-radiu
 .brow .nm small{display:block;color:var(--mute);font-size:12px;margin-top:2px}
 .brow .st{font-size:13px;color:var(--mute);text-align:right;white-space:nowrap}
 .brow .st b{color:var(--ink);font-weight:600}
+/* runes: two pages side by side, each keystone + runes + shards */
+.rpages{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:12px;margin-top:10px}
+.rpage{border:1px solid rgba(59,52,34,.7);border-radius:12px;padding:12px;background:rgba(0,0,0,.15)}
+.rhead{display:flex;align-items:center;gap:12px}
+.rhead .ks{width:52px;height:52px;flex:none}
+.rhead b{font-size:15px}.rhead small{display:block;font-size:13px;color:var(--mute);margin-top:2px}
+.rgrp{margin-top:10px}
+.rgrp h4{margin:0 0 6px;font:600 12px Inter,sans-serif;color:var(--mute);text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:6px}
+.rgrp h4 img{width:18px;height:18px}
+.rlist{display:flex;flex-wrap:wrap;gap:6px 12px}
+.rr{display:inline-flex;align-items:center;gap:6px;font-size:13px}
+.rr img{width:30px;height:30px;border-radius:50%;background:#0a0f18}
+.shard{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--ink)}
 @media(max-width:640px){.brow{grid-template-columns:auto minmax(0,1fr)}.brow .lab{grid-column:1/-1}.brow .lab:empty{display:none}.brow .st{grid-column:1/-1;text-align:left}}
 .opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:10px;margin-top:10px}
 .opt h4{margin:0 0 6px;font:600 13px Inter,sans-serif;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
@@ -219,7 +232,16 @@ function render(d){
   /* summoner spells */
   const SS=(d.summs&&d.summs.length?d.summs:(d.summ?[d.summ]:[])).filter(x=>x.spells);
   const su=SS.length?`<div class="card"><h3>Summoner spells</h3>${SS.map(x=>`<div class="summ">${x.spells.map(y=>`${y.img?img(`${DD}${V}/img/spell/${y.img}`,'',y.name):''}<b>${esc(y.name)}</b>`).join('<span class="gt">+</span>')}<span class="meta" style="margin:0 0 0 auto;text-align:right"><b style="color:var(--ink)">${pct(x.pick)}</b> · ${x.play.toLocaleString('en-GB')} games · ${pct(x.wr)} win</span></div>`).join('')}${SS.length<2?'<div class="meta">Only the most common pair is available right now.</div>':''}</div>`:'';
-  b=su+b;
+  /* runes: op.gg's two most played rune pages (pick rate, games and win rate are for the whole page) */
+  const RI=(x,c='')=>x&&x.icon?`<img class="${c}" src="${DD.replace('/cdn/','/cdn/img/')}${esc(x.icon)}" alt="${esc(x.name)}" title="${esc(x.name)}" loading="lazy" onerror="this.style.visibility='hidden'">`:'';
+  const RP=(d.runes||[]).filter(r=>r.keys&&r.keys.length);
+  const ru=RP.length?`<div class="card"><h3>Runes</h3><div class="rpages">${RP.map(r=>`<div class="rpage">
+      <div class="rhead">${RI(r.keys[0],'ks')}<div><b>${esc(r.keys[0].name)}</b><small>${esc(r.primary.name)} + ${esc(r.secondary.name)}</small><small>${st(r)}</small></div></div>
+      <div class="rgrp"><h4>${RI(r.primary)}${esc(r.primary.name)}</h4><div class="rlist">${r.keys.slice(1).map(x=>`<span class="rr">${RI(x)}${esc(x.name)}</span>`).join('')}</div></div>
+      <div class="rgrp"><h4>${RI(r.secondary)}${esc(r.secondary.name)}</h4><div class="rlist">${r.subs.map(x=>`<span class="rr">${RI(x)}${esc(x.name)}</span>`).join('')}</div></div>
+      ${r.shards.length?`<div class="rgrp"><h4>Shards</h4><div class="rlist">${r.shards.map(x=>`<span class="shard">${esc(x.name)}</span>`).join('')}</div></div>`:''}
+    </div>`).join('')}</div></div>`:'';
+  b=su+ru+b;
 
   /* skill order */
   let s='';
