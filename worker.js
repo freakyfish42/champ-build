@@ -297,25 +297,30 @@ export async function build(cName, pos) {
       if (position !== 'mid') a = await analysis(champ, position);
     }
   }
+  // all the Riot name/icon lookups (and the tier list's op.gg time) at once instead of one after another
+  const [tl, N, R, S, sp] = await Promise.all([
+    region === 'EUW' ? tierList().catch(() => null) : null,
+    position === 'support' ? itemNames(dd.version) : null,
+    a.runes && a.runes.length ? runeData(dd.version) : null,
+    a.summs && a.summs.length ? summs(dd.version) : null,
+    spells(dd.version, champ.id),
+  ]);
   // op.gg leaves the support item (World Atlas and its upgrades) out of starting items; supports always start with it
   const SUP = [3865, 3866, 3867, 3869, 3870, 3871, 3876, 3877];
-  if (position === 'support' && a.starter && !a.starter.items.some(i => SUP.includes(+i.id))) {
-    const N = await itemNames(dd.version);
-    a = { ...a, starter: { ...a.starter, items: [{ id: 3865, name: N[3865] || 'World Atlas', added: true }, ...a.starter.items] } };
-  }
+  if (N && a.starter && !a.starter.items.some(i => SUP.includes(+i.id))) a = { ...a, starter: { ...a.starter, items: [{ id: 3865, name: N[3865] || 'World Atlas', added: true }, ...a.starter.items] } };
   // when op.gg last processed its EUW stats: the champion data only says when op.gg answered, so use the tier list's time
-  if (region === 'EUW') { try { const tl = await tierList(); if (tl.region === 'EUW' && tl.opggAt) a = { ...a, opggAt: tl.opggAt }; } catch {} }
-  if (a.runes && a.runes.length) { const R = await runeData(dd.version), r1 = i => ({ id: i, name: (R[i] || {}).name || 'Rune ' + i, icon: (R[i] || {}).icon || '' });
+  if (tl && tl.region === 'EUW' && tl.opggAt) a = { ...a, opggAt: tl.opggAt };
+  if (R) { const r1 = i => ({ id: i, name: (R[i] || {}).name || 'Rune ' + i, icon: (R[i] || {}).icon || '' });
     a = { ...a, runes: a.runes.map(x => ({ ...x, primary: r1(x.primary), secondary: r1(x.secondary), keys: x.keys.map(r1), subs: x.subs.map(r1), shards: x.shards.map(i => ({ id: i, name: SHARDS[i] || 'Shard ' + i })) })) }; }
-  if (a.summs && a.summs.length) { const S = await summs(dd.version); a = { ...a, summs: a.summs.map(x => ({ ...x, spells: x.ids.map(i => ({ id: i, name: (S[i] || {}).name || 'Spell ' + i, img: (S[i] || {}).img || '' })) })) }; }
-  return { champion: champ.name, id: champ.id, version: dd.version, position, tier: TIER, region, note, ...a, spells: await spells(dd.version, champ.id), updated: a.fetchedAt || Date.now() };
+  if (S) a = { ...a, summs: a.summs.map(x => ({ ...x, spells: x.ids.map(i => ({ id: i, name: (S[i] || {}).name || 'Spell ' + i, img: (S[i] || {}).img || '' })) })) };
+  return { champion: champ.name, id: champ.id, version: dd.version, position, tier: TIER, region, note, ...a, spells: sp, updated: a.fetchedAt || Date.now() };
 }
 
 async function analysisWeb(champ, position, dd) {
   const k = `w6:${champ.id}:${position}`; let v = memGet(k); if (v) return v;
   if (!champ.key || !POS_WEB[position]) throw new Error('no EUW lookup for ' + champ.name);
-  const j = await web(`/${champ.key}/${POS_WEB[position]}?tier=${TIER}`);
-  v = { ...shapeWeb(j, dd.list, await itemNames(dd.version)), fetchedAt: Date.now() };
+  const [j, N] = await Promise.all([web(`/${champ.key}/${POS_WEB[position]}?tier=${TIER}`), itemNames(dd.version)]);
+  v = { ...shapeWeb(j, dd.list, N), fetchedAt: Date.now() };
   if (!v.core && !v.skills && !v.summs.length) throw new Error('op.gg EUW has no build for ' + champ.name + ' ' + position);
   memSet(k, v, TTL);
   return v;

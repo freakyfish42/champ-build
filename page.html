@@ -197,10 +197,25 @@ document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)r
   if(b.dataset.p&&cur)load(cur.champion,b.dataset.p)});
 
 function pick(name){qEl.blur();openChamp(name,'')}
+/* faster clicks: builds are fetched once and kept; hovering a champion starts the fetch early */
+const pre=new Map();
+function getBuild(name,pos){const u=`/api/build?c=${encodeURIComponent(name)}${pos?'&p='+pos:''}`;
+  const hit=pre.get(u);if(hit&&Date.now()-hit.t<10*60e3)return hit.p;
+  const p=fetch(u).then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error||'Error '+r.status);return d}).catch(e=>{pre.delete(u);throw e});
+  pre.set(u,{p,t:Date.now()});return p}
+let hoverT=0;
+const warm=el=>{const row=el&&el.closest&&el.closest('#tl tr[data-c],.crow[data-c]');if(row)getBuild(row.dataset.c,row.dataset.r||'').catch(()=>{})};
+document.addEventListener('mouseover',e=>{clearTimeout(hoverT);const t=e.target;hoverT=setTimeout(()=>warm(t),90)});
+document.addEventListener('touchstart',e=>warm(e.target),{passive:true});
+document.addEventListener('focusin',e=>warm(e.target));
+/* while the build loads, show what the tier list already knows: icon, role, win rate and games */
+function quickHead(name,pos){if(!TL)return '';let best=null,bp='';
+  for(const p of RO)for(const e of (TL.roles[p]||[]))if(e.name===name&&(pos?p===pos:(!best||e.play>best.play))){best=e;bp=p}
+  return best?`<div class="card"><div class="head">${img(champImg(best.id),'big',name)}<div><h2>${esc(name)}</h2><div class="stats">${RN[bp]} · <b>${pct(best.wr)}</b> win rate · ${best.play.toLocaleString('en-GB')} games</div></div></div></div>`:''}
 async function load(name,pos){const n=++reqN;
-  out.innerHTML=`<div class="card load">Loading ${esc(name)}…</div>`;
-  try{const r=await fetch(`/api/build?c=${encodeURIComponent(name)}${pos?'&p='+pos:''}`);const d=await r.json();
-    if(n!==reqN)return;if(!r.ok)throw new Error(d.error||'Error '+r.status);
+  out.innerHTML=`<button id="backBtn" class="back">← All champions</button>${quickHead(name,pos)}<div class="card load">Loading the build…</div>`;
+  try{const d=await getBuild(name,pos);
+    if(n!==reqN)return;
     cur=d;if(!V)V=d.version;render(d);
     try{history.replaceState(history.state,'',`?c=${encodeURIComponent(d.champion)}&r=${d.position}`)}catch(e){}
     document.title=`${d.champion} ${RN[d.position]||''} build`}
