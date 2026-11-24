@@ -58,7 +58,7 @@ button{font:inherit;color:var(--ink);cursor:pointer;min-height:40px;border-radiu
 .crow b{font-size:15px;white-space:nowrap}.bad .crow b{color:#e08a7a}.good .crow b{color:var(--good)}
 .ic{width:28px;height:28px;border-radius:6px;object-fit:cover;flex:none;background:var(--line)}
 .head{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
-.head .big{width:64px;height:64px;border-radius:12px;border:2px solid var(--gold)}
+.head .big{width:56px;height:56px;border-radius:12px;border:2px solid var(--gold)}
 .stats{color:var(--mute);font-size:14px;margin-top:4px}
 .stats b{color:var(--ink);font-weight:600}
 .roles{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
@@ -77,15 +77,35 @@ button{font:inherit;color:var(--ink);cursor:pointer;min-height:40px;border-radiu
 .meta{font-size:13px;color:var(--mute);margin-top:8px}
 /* build: one row per step, every item icon the same size */
 .blist{margin-top:6px}
-.brow{display:grid;grid-template-columns:96px 184px minmax(0,1fr) auto;align-items:center;gap:6px 14px;padding:10px 0;border-top:1px solid rgba(59,52,34,.6)}
+.brow{display:grid;grid-template-columns:82px 140px minmax(0,1fr) auto;align-items:center;gap:4px 12px;padding:5px 0;border-top:1px solid rgba(59,52,34,.6)}
 .brow:first-child{border-top:0}
 .brow .lab{font:600 12px Cinzel,serif;letter-spacing:.05em;color:var(--gold)}
-.brow .ics{display:flex;align-items:center;gap:6px}
-.brow .ii{display:block;width:44px;height:44px;flex:none}
-.brow .ii img{display:block;width:44px;height:44px;border-radius:8px;border:1px solid var(--line);background:var(--chip)}
-.brow .ics .gt{font-size:16px;opacity:.7}
-.brow .nm{font-size:14px;line-height:1.3}
-.brow .nm small{display:block;color:var(--mute);font-size:12px;margin-top:2px}
+.brow .ics{display:flex;align-items:center;gap:4px}
+.brow .ii{display:block;width:34px;height:34px;flex:none}
+.brow .ii img{display:block;width:34px;height:34px;border-radius:7px;border:1px solid var(--line);background:var(--chip)}
+.brow .ics .gt{font-size:14px;opacity:.7}
+.brow .nm{font-size:13px;line-height:1.3}
+.brow .nm small{display:block;color:var(--mute);font-size:11px;margin-top:1px}
+/* boots and later items: one row of small tiles (icon + pick rate), details on hover */
+.brow.tiles{grid-template-columns:82px minmax(0,1fr)}
+.tl2{display:flex;flex-wrap:wrap;gap:6px 14px}
+.tile{display:flex;align-items:center;gap:7px;font-size:12px;line-height:1.25;color:var(--mute)}
+.tile b{display:block;color:var(--ink);font-size:13px;font-weight:600}
+.tile .ii,.tile .ii img{width:34px;height:34px}
+.tile .ii img{display:block;border-radius:7px;border:1px solid var(--line);background:var(--chip)}
+/* champion page: build and skill order fit on one screen */
+body:has(#homeCard[hidden]) .sub{display:none}
+body:has(#homeCard[hidden]) h1{font-size:22px}
+#out .card{padding:12px 14px;margin-bottom:10px}
+#out .back{margin-bottom:8px;min-height:34px}
+#out h3{font-size:15px}
+#out .meta{margin-top:4px;font-size:12px}
+#out .head .roles{margin:0 0 0 auto}
+#out .roles button{min-height:34px;padding:4px 10px}
+#out .grid table{border-spacing:2px}
+#out .grid th.k .sk{width:24px;height:24px;border-radius:6px;font-size:12px}
+#out .grid td{height:22px;font-size:12px}
+#out .grid thead th{font-size:11px;line-height:1.2}
 .brow .st{font-size:13px;color:var(--mute);text-align:right;white-space:nowrap}
 .brow .st b{color:var(--ink);font-weight:600}
 /* runes: two pages side by side, each keystone + runes + shards */
@@ -101,15 +121,15 @@ button{font:inherit;color:var(--ink);cursor:pointer;min-height:40px;border-radiu
 .rr{display:inline-flex;align-items:center;gap:6px;font-size:13px}
 .rr img{width:30px;height:30px;border-radius:50%;background:#0a0f18}
 .shard{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--ink)}
-@media(max-width:640px){.brow{grid-template-columns:auto minmax(0,1fr)}.brow .lab{grid-column:1/-1}.brow .lab:empty{display:none}.brow .st{grid-column:1/-1;text-align:left}}
+@media(max-width:640px){.brow,.brow.tiles{grid-template-columns:auto minmax(0,1fr)}.brow .lab{grid-column:1/-1}.brow .lab:empty{display:none}.brow .st{grid-column:1/-1;text-align:left}}
 .opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:10px;margin-top:10px}
 .opt h4{margin:0 0 6px;font:600 13px Inter,sans-serif;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
 .orow{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:14px}
 .orow .it{width:32px;height:32px;border-radius:6px}
 .orow span{flex:1}.orow small{color:var(--mute);white-space:nowrap}
 /* skill order grid */
-.maxline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
-.sk{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:8px;border:1px solid var(--gold);background:var(--chip);font-family:Cinzel,serif;font-weight:700;position:relative;overflow:hidden}
+.maxline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}
+.sk{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:8px;border:1px solid var(--gold);background:var(--chip);font-family:Cinzel,serif;font-weight:700;position:relative;overflow:hidden}
 .sk img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.55}
 .sk b{position:relative;text-shadow:0 1px 3px #000}
 td.fill{opacity:.5}
@@ -117,10 +137,10 @@ td.fill{opacity:.5}
 .summ img{width:44px;height:44px;border-radius:8px;border:1px solid var(--line);background:var(--chip)}
 .summ b{font-size:15px}
 .gt{color:var(--gold);font-size:18px}
-.grid{overflow-x:auto;margin-top:12px}
+.grid{overflow-x:auto;margin-top:6px}
 table{border-collapse:separate;border-spacing:3px;font-size:13px}
 th{font-weight:500;color:var(--mute);width:26px;text-align:center}
-td{width:26px;height:26px;text-align:center;border-radius:5px;background:rgba(255,255,255,.04)}
+td{width:26px;height:22px;text-align:center;border-radius:5px;background:rgba(255,255,255,.04)}
 td.on{background:linear-gradient(180deg,#2378b5,#154b74);color:#fff;font-weight:600}
 td.on.r{background:linear-gradient(180deg,#d8bd85,#9c7b44);color:#130e05}
 th.k{width:auto;text-align:left;padding-right:6px;white-space:nowrap;color:var(--ink);font-weight:600}
@@ -231,8 +251,8 @@ function render(d){
   const share=x=>x&&x.pick!=null?x.pick:null;
   const of=x=>!x||!x.play?'':`${x.pick!=null?pct(x.pick)+' of games, ':''}${x.play.toLocaleString('en-GB')} games`;
   const head=`<div class="card"><div class="head">${img(champImg(d.id),'big',d.champion)}<div><h2>${esc(d.champion)}</h2>
-    <div class="stats">${esc(RN[d.position]||d.position)}${role&&role.wr!=null?` · <b>${pct(role.wr)}</b> win rate`:''}${role&&role.play?` · ${role.play.toLocaleString('en-GB')} games`:''} · ${d.region==='EUW'?'EUW':'all regions'} · Emerald+</div></div></div>
-    ${d.roles.length>1?`<div class="roles" role="group" aria-label="Role">${d.roles.map(r=>`<button data-p="${r.p}" aria-pressed="${r.p===d.position}">${RN[r.p]}<small>${r.rate!=null?Math.round(r.rate*100)+'%':''}</small></button>`).join('')}</div>`:''}</div>`;
+    <div class="stats">${esc(RN[d.position]||d.position)}${role&&role.wr!=null?` · <b>${pct(role.wr)}</b> win rate`:''}${role&&role.play?` · ${role.play.toLocaleString('en-GB')} games`:''} · ${d.region==='EUW'?'EUW':'all regions'} · Emerald+</div></div>
+    ${d.roles.length>1?`<div class="roles" role="group" aria-label="Role">${d.roles.map(r=>`<button data-p="${r.p}" aria-pressed="${r.p===d.position}">${RN[r.p]}<small>${r.rate!=null?Math.round(r.rate*100)+'%':''}</small></button>`).join('')}</div>`:''}</div></div>`;
 
   /* build: one row per step (start, core, two boots, later items), all icons 44px, stats lined up on the right */
   const ic=it=>`<span class="ii" title="${esc(it.name)}">${img(itemImg(it.id),'',it.name)}</span>`;
@@ -242,9 +262,12 @@ function render(d){
   const brs=[];
   if(d.starter)brs.push(brow('Start',d.starter,false,d.starter.items.some(i=>i.added)?'World Atlas added by us: op.gg leaves the support item out of its start stats.':''));
   if(d.core)brs.push(brow('Core build',d.core,true));
-  [d.boots,d.boots2].filter(Boolean).forEach((x,i)=>brs.push(brow(i?'':'Boots',x)));
-  [['4th item',d.fourth],['5th item',d.fifth],['6th item',d.sixth],['Other popular items',d.late]].forEach(([t,l])=>(l||[]).forEach((x,i)=>brs.push(brow(i?'':t,x))));
-  let b=brs.length?`<div class="card"><h3>Build</h3><div class="blist">${brs.join('')}</div><p class="meta">Pick rate · games · win rate. Pick rate is out of the games where op.gg recorded that item.</p></div>`
+  const tip=x=>`${x.items.map(i=>i.name).join(' + ')}: ${x.pick!=null?pct(x.pick)+' · ':''}${x.play.toLocaleString('en-GB')} games · ${x.wr==null?'–':pct(x.wr)} win`;
+  const tile=(x,named)=>`<span class="tile" title="${esc(tip(x))}">${x.items.map(ic).join('')}<span>${named?grp(x.items)+'<br>':''}<b>${x.pick!=null?pct(x.pick):x.play.toLocaleString('en-GB')}</b>${named?`${x.play.toLocaleString('en-GB')} games · <span class="${x.wr==null?'':x.wr>=.52?'hi':x.wr<.48?'lo':''}">${x.wr==null?'–':pct(x.wr)} win</span>`:''}</span></span>`;
+  const trow=(lab,list,named)=>`<div class="brow tiles"><span class="lab">${lab}</span><span class="tl2">${list.map(x=>tile(x,named)).join('')}</span></div>`;
+  const bt=[d.boots,d.boots2].filter(Boolean);if(bt.length)brs.push(trow('Boots',bt,true));
+  [['4th item',d.fourth],['5th item',d.fifth],['6th item',d.sixth],['Other items',d.late]].forEach(([t,l])=>{if(l&&l.length)brs.push(trow(t,l,false))});
+  let b=brs.length?`<div class="card"><h3>Build</h3><div class="blist">${brs.join('')}</div><p class="meta">Pick rate · games · win rate. Hover an item for its name and numbers.</p></div>`
     :'<div class="card empty">OP.GG has no item build for this champion in this role yet.</div>';
   /* summoner spells */
   const SS=(d.summs&&d.summs.length?d.summs:(d.summ?[d.summ]:[])).filter(x=>x.spells);
@@ -258,7 +281,6 @@ function render(d){
       <div class="rgrp"><h4>${RI(r.secondary)}${esc(r.secondary.name)}</h4><div class="rlist">${r.subs.map(x=>`<span class="rr">${RI(x)}${esc(x.name)}</span>`).join('')}</div></div>
       ${r.shards.length?`<div class="rgrp"><h4>Shards</h4><div class="rlist">${r.shards.map(x=>`<span class="shard">${esc(x.name)}</span>`).join('')}</div></div>`:''}
     </div>`).join('')}</div></div>`:'';
-  b=su+ru+b;
 
   /* skill order */
   let s='';
@@ -285,7 +307,7 @@ function render(d){
       ${cw.length?`<div class="bad"><h4>Struggles against</h4>${cw.map(cRow).join('')}</div>`:''}
       ${cs.length?`<div class="good"><h4>Good against</h4>${cs.map(cRow).join('')}</div>`:''}
     </div></div>`:'<div class="card empty">Not enough games yet for counter picks in this role.</div>';
-  out.innerHTML='<button id="backBtn" class="back">← All champions</button>'+head+b+s+k;showTime(d)}
+  out.innerHTML='<button id="backBtn" class="back">← All champions</button>'+head+b+s+su+ru+k;showTime(d)}
 
 renderSeg();renderTL();
 fetch('/api/champs').then(r=>r.json()).then(d=>{if(!d.list)return;V=d.version;LIST=d.list;{const pe=document.getElementById('patch');if(!pe.textContent)pe.textContent='Patch '+d.version.split('.').slice(0,2).join('.');}renderTL();if(cur)render(cur)}).catch(()=>{});
