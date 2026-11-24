@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Champion builds</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Same Retro look as the Clash draft helper: night blue, old gold, classic serif. Generic, no client assets. */
+:root{color-scheme:dark;--bg:#060b14;--panel:#0c1724;--line:#3b3422;--ink:#ebe3c9;--mute:#98a4af;--blue:#1d6aa1;--gold:#c8aa6e;--chip:#122133;--good:#5fb98a}
+*{box-sizing:border-box;min-width:0}
+[hidden]{display:none!important}
+body{margin:0;min-height:100vh;color:var(--ink);font:16px/1.5 Inter,system-ui,sans-serif;background:radial-gradient(900px 420px at 50% -8%,rgba(40,110,170,.35),transparent 70%),linear-gradient(180deg,#081221,#04080f);background-attachment:fixed}
+h1,h2,h3{font-family:Cinzel,serif;letter-spacing:.04em;margin:0;line-height:1.1}
+h1{font-size:clamp(26px,5.5vw,38px)}h2{font-size:clamp(24px,5vw,32px)}h3{font-size:17px;color:var(--gold)}
+.wrap{max-width:1100px;margin:0 auto;padding:clamp(18px,3vw,36px) max(4vw,14px) 40px}
+.sub{color:var(--mute);margin:6px 0 18px;font-size:15px}
+.card{background:linear-gradient(180deg,#112033,#0a1420);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:inset 0 1px 0 rgba(200,170,110,.25),0 6px 18px rgba(0,0,0,.45);margin-bottom:14px}
+input{font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-height:46px;width:100%}
+input:focus-visible,button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+button{font:inherit;color:var(--ink);cursor:pointer;min-height:40px;border-radius:8px;border:1px solid var(--line);background:linear-gradient(180deg,#1a2c42,#0f1b2b);padding:6px 12px;font-weight:600}
+/* tier list */
+.tlbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.tlbar input{flex:1 1 220px;width:auto}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;flex-wrap:wrap}
+.seg button{border:0;border-radius:0;min-height:44px;padding:6px 14px;background:transparent;font-weight:600}
+.seg button[aria-pressed=true]{background:linear-gradient(180deg,#2378b5,#154b74);color:#fff}
+.patch{color:var(--mute);font-size:14px;white-space:nowrap}
+.tlwrap{overflow-x:auto;margin-top:12px}
+.tl{border-collapse:collapse;width:100%;font-size:14px;min-width:640px}
+.tl th{font:600 12px Inter,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--mute);text-align:right;padding:0;border-bottom:1px solid var(--line);width:auto;height:auto}
+.tl th button{all:unset;cursor:pointer;display:block;padding:10px 8px;text-align:inherit}
+.tl th button:focus-visible{outline:2px solid var(--gold)}
+.tl th[aria-sort] button{color:var(--gold)}
+.tl th.l{text-align:left}
+.tl td{padding:6px 8px;border-bottom:1px solid rgba(59,52,34,.55);text-align:right;width:auto;height:auto;background:none;border-radius:0;white-space:nowrap}
+.tl td.l{text-align:left}
+.tl tbody tr{cursor:pointer}
+.tl tbody tr:hover,.tl tbody tr:focus-visible{background:rgba(255,255,255,.05);outline:none}
+.tl .rk{color:var(--mute);width:36px}
+.tl .cn{display:flex;align-items:center;gap:10px;font-weight:600}
+.tl .cn img{width:36px;height:36px;border-radius:8px;background:var(--chip);flex:none}
+.rb{display:inline-block;font-size:12px;font-weight:600;color:var(--mute);border:1px solid var(--line);border-radius:6px;padding:1px 7px}
+.tb{display:inline-grid;place-items:center;min-width:30px;height:26px;border-radius:7px;font:700 13px Cinzel,serif;color:#130e05}
+.t1{background:linear-gradient(180deg,#ffd68a,#e0a536)}.t2{background:linear-gradient(180deg,#d8bd85,#9c7b44)}.t3{background:#5fb98a}.t4{background:#6f8aa3}.t5{background:#5b5f66;color:#ddd}
+.hi{color:#6fd3c0;font-weight:600}.lo{color:#e08a7a;font-weight:600}
+.up{color:var(--good)}.down{color:#e08a7a}.flat{color:var(--mute)}
+.back{margin-bottom:12px}
+/* counters */
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:14px;margin-top:10px}
+.cols h4{margin:0 0 6px;font:600 13px Inter,sans-serif;text-transform:uppercase;letter-spacing:.06em}
+.cols .bad h4{color:#e08a7a}.cols .good h4{color:var(--good)}
+.crow{display:flex;align-items:center;gap:10px;width:100%;padding:5px 6px;min-height:0;border:0;border-radius:8px;background:none;text-align:left;font-weight:500}
+.crow:hover,.crow:focus-visible{background:rgba(255,255,255,.05)}
+.crow img{width:36px;height:36px;border-radius:8px;flex:none;background:var(--chip)}
+.crow span{flex:1;font-size:14px}.crow small{display:block;color:var(--mute);font-size:12px;font-weight:400}
+.crow b{font-size:15px;white-space:nowrap}.bad .crow b{color:#e08a7a}.good .crow b{color:var(--good)}
+.ic{width:28px;height:28px;border-radius:6px;object-fit:cover;flex:none;background:var(--line)}
+.head{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.head .big{width:64px;height:64px;border-radius:12px;border:2px solid var(--gold)}
+.stats{color:var(--mute);font-size:14px;margin-top:4px}
+.stats b{color:var(--ink);font-weight:600}
+.roles{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.roles button[aria-pressed=true]{background:linear-gradient(180deg,#2378b5,#154b74);border-color:#2378b5}
+.roles small{color:var(--mute);font-weight:400;margin-left:4px}
+.roles button[aria-pressed=true] small{color:#d7e6f3}
+/* build order: numbered steps with item icons and an arrow between them */
+.steps{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px 4px;margin-top:10px}
+.step{display:flex;flex-direction:column;align-items:center;gap:4px;width:74px;text-align:center}
+.step .n{font-family:Cinzel,serif;font-size:12px;color:var(--gold);letter-spacing:.05em}
+.step .it{width:48px;height:48px;border-radius:8px;border:1px solid var(--line);background:var(--chip)}
+.step .nm{font-size:12px;line-height:1.25;color:var(--ink)}
+.arrow{color:var(--gold);opacity:.6;align-self:center;margin-top:-18px;font-size:18px}
+.group{display:flex;gap:4px;align-items:flex-start}
+.startset{display:flex;gap:3px}.startset .it{width:36px;height:36px}
+.meta{font-size:13px;color:var(--mute);margin-top:8px}
+/* build: one row per step, every item icon the same size */
+.blist{margin-top:6px}
+.brow{display:grid;grid-template-columns:96px 184px minmax(0,1fr) auto;align-items:center;gap:6px 14px;padding:10px 0;border-top:1px solid rgba(59,52,34,.6)}
+.brow:first-child{border-top:0}
+.brow .lab{font:600 12px Cinzel,serif;letter-spacing:.05em;color:var(--gold)}
+.brow .ics{display:flex;align-items:center;gap:6px}
+.brow .ii{display:block;width:44px;height:44px;flex:none}
+.brow .ii img{display:block;width:44px;height:44px;border-radius:8px;border:1px solid var(--line);background:var(--chip)}
+.brow .ics .gt{font-size:16px;opacity:.7}
+.brow .nm{font-size:14px;line-height:1.3}
+.brow .nm small{display:block;color:var(--mute);font-size:12px;margin-top:2px}
+.brow .st{font-size:13px;color:var(--mute);text-align:right;white-space:nowrap}
+.brow .st b{color:var(--ink);font-weight:600}
+@media(max-width:640px){.brow{grid-template-columns:auto minmax(0,1fr)}.brow .lab{grid-column:1/-1}.brow .lab:empty{display:none}.brow .st{grid-column:1/-1;text-align:left}}
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:10px;margin-top:10px}
+.opt h4{margin:0 0 6px;font:600 13px Inter,sans-serif;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
+.orow{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:14px}
+.orow .it{width:32px;height:32px;border-radius:6px}
+.orow span{flex:1}.orow small{color:var(--mute);white-space:nowrap}
+/* skill order grid */
+.maxline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+.sk{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:8px;border:1px solid var(--gold);background:var(--chip);font-family:Cinzel,serif;font-weight:700;position:relative;overflow:hidden}
+.sk img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.55}
+.sk b{position:relative;text-shadow:0 1px 3px #000}
+td.fill{opacity:.5}
+.summ{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+.summ img{width:44px;height:44px;border-radius:8px;border:1px solid var(--line);background:var(--chip)}
+.summ b{font-size:15px}
+.gt{color:var(--gold);font-size:18px}
+.grid{overflow-x:auto;margin-top:12px}
+table{border-collapse:separate;border-spacing:3px;font-size:13px}
+th{font-weight:500;color:var(--mute);width:26px;text-align:center}
+td{width:26px;height:26px;text-align:center;border-radius:5px;background:rgba(255,255,255,.04)}
+td.on{background:linear-gradient(180deg,#2378b5,#154b74);color:#fff;font-weight:600}
+td.on.r{background:linear-gradient(180deg,#d8bd85,#9c7b44);color:#130e05}
+th.k{width:auto;text-align:left;padding-right:6px;white-space:nowrap;color:var(--ink);font-weight:600}
+.empty,.err{color:var(--mute);font-size:14px}.err{color:#e08a7a}
+.foot{color:var(--mute);font-size:12px;text-align:center;margin-top:18px}
+.load{color:var(--mute);font-size:14px;padding:6px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Champion builds</h1>
+  <p class="sub">Every champion by role on EUW, from OP.GG. Click one for its build, skill order and counters.</p>
+  <div class="card" id="homeCard">
+  <div id="home">
+    <div class="tlbar">
+      <input id="q" type="search" placeholder="Search champions" autocomplete="off" aria-label="Search champions" enterkeyhint="search">
+      <div class="seg" role="group" aria-label="Role" id="roleSeg"></div>
+      <span class="patch" id="patch"></span>
+    </div>
+    <div class="tlwrap"><table class="tl" id="tl"></table></div>
+  </div>
+  </div>
+  <div id="out" aria-live="polite"></div>
+  <p class="foot">Data: OP.GG, EUW, Emerald+ ranked solo/duo, current patch, refreshed every few hours · icons: Riot Data Dragon</p>
+</div>
+<script>
+{
+const DD='https://ddragon.leagueoflegends.com/cdn/';
+const RN={top:'Top',jungle:'Jungle',mid:'Mid',adc:'Bot',support:'Support'};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm=s=>String(s).toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g,'');
+const pct=x=>x==null?'':(x*100).toFixed(1)+'%';
+let V='',LIST=[],cur=null,reqN=0;
+const qEl=document.getElementById('q'),out=document.getElementById('out');
+const champImg=id=>V?`${DD}${V}/img/champion/${id}.png`:'';
+const itemImg=id=>`${DD}${V}/img/item/${id}.png`;
+const img=(src,cls,alt='')=>`<img class="${cls}" src="${esc(src)}" alt="${esc(alt)}" loading="lazy" onerror="this.style.visibility='hidden'">`;
+
+/* front page: tier list table, filterable by role and search, sortable by column */
+const RO=['top','jungle','mid','adc','support'];
+const TIERS={1:'S+',2:'S',3:'A',4:'B',5:'C'};
+let TL=null,TLerr='',role='all',sortK='tier',sortD=1;
+const COLS=[['rk','#',0],['role','Role',0],['name','Champion',1],['tier','Tier',1],['wr','Win rate',1],['pick','Pick rate',1],['ban','Ban rate',1],['play','Matches',1],['trend','Rank change',1]];
+function rows(){if(!TL)return[];let r=[];
+  for(const p of RO)if(role==='all'||role===p)for(const e of (TL.roles[p]||[]))r.push({...e,p});
+  const q=norm(qEl.value);if(q)r=r.filter(e=>norm(e.name).includes(q));
+  const key={tier:e=>[e.tier||9,-e.wr],wr:e=>[-e.wr],pick:e=>[-(e.pick||0)],ban:e=>[-(e.ban||0)],play:e=>[-e.play],name:e=>[e.name.toLowerCase()],trend:e=>[-(e.trend??-1e9)]}[sortK]||(e=>[0]);
+  r.sort((a,b)=>{const x=key(a),y=key(b);for(let i=0;i<x.length;i++){if(x[i]<y[i])return -sortD;if(x[i]>y[i])return sortD}return 0});return r}
+function renderSeg(){document.getElementById('roleSeg').innerHTML=[['all','All'],...RO.map(p=>[p,RN[p]])].map(([k,l])=>`<button data-role="${k}" aria-pressed="${k===role}">${l}</button>`).join('')}
+function renderTL(){const el=document.getElementById('tl');
+  if(!TL){el.innerHTML=`<tbody><tr><td class="l empty" style="cursor:default">${TLerr?esc(TLerr):'Loading the tier list…'}</td></tr></tbody>`;return}
+  const r=rows();
+  const head='<thead><tr>'+COLS.map(([k,l,s])=>`<th class="${['rk','role','name'].includes(k)?'l':''}"${sortK===k?` aria-sort="${sortD>0?(k==='name'?'ascending':'descending'):(k==='name'?'descending':'ascending')}"`:''}>${s?`<button data-sort="${k}">${l}${sortK===k?(sortD>0?' ▾':' ▴'):''}</button>`:`<span style="display:block;padding:10px 8px">${l}</span>`}</th>`).join('')+'</tr></thead>';
+  const tr=e=>e.trend==null?'<span class="flat">new</span>':e.trend>0?`<span class="up">▲ ${e.trend}</span>`:e.trend<0?`<span class="down">▼ ${-e.trend}</span>`:'<span class="flat">–</span>';
+  const body=r.map((e,i)=>`<tr data-c="${esc(e.name)}" data-r="${e.p}" tabindex="0"><td class="l rk">${i+1}</td><td class="l"><span class="rb">${RN[e.p]}</span></td><td class="l"><span class="cn">${e.id?img(champImg(e.id),'',''):''}${esc(e.name)}</span></td><td>${TIERS[e.tier]?`<span class="tb t${e.tier}">${TIERS[e.tier]}</span>`:'–'}</td><td class="${e.wr>=.52?'hi':e.wr<.48?'lo':''}">${pct(e.wr)}</td><td>${pct(e.pick)}</td><td>${pct(e.ban)}</td><td>${e.play.toLocaleString('en-GB')}</td><td>${tr(e)}</td></tr>`).join('');
+  el.innerHTML=head+'<tbody>'+(body||`<tr><td class="l empty" colspan="9" style="cursor:default">No champion matches that.</td></tr>`)+'</tbody>'}
+qEl.addEventListener('input',renderTL);
+document.addEventListener('click',e=>{
+  const rb=e.target.closest('button[data-role]');if(rb){role=rb.dataset.role;renderSeg();renderTL();return}
+  const sb=e.target.closest('button[data-sort]');if(sb){const k=sb.dataset.sort;if(sortK===k)sortD=-sortD;else{sortK=k;sortD=1}renderTL();return}
+  const row=e.target.closest('#tl tr[data-c]');if(row)openChamp(row.dataset.c,row.dataset.r);
+  if(e.target.closest('#backBtn')){if(history.state&&history.state.fromHome)history.back();else showHome(true)}});
+document.addEventListener('keydown',e=>{const row=e.target.closest&&e.target.closest('#tl tr[data-c]');if(row&&(e.key==='Enter'||e.key===' ')){e.preventDefault();openChamp(row.dataset.c,row.dataset.r)}});
+const homeCard=()=>document.getElementById('homeCard');
+function openChamp(name,pos,push=true){if(push){const fromHome=!homeCard().hidden||!!(history.state&&history.state.fromHome);try{history.pushState({c:name,fromHome},'',`?c=${encodeURIComponent(name)}${pos?'&r='+pos:''}`)}catch(e){}}
+  homeCard().hidden=true;load(name,pos||'');try{window.scrollTo({top:0})}catch(e){}}
+function showHome(push){reqN++;cur=null;out.innerHTML='';homeCard().hidden=false;document.title='Champion builds';if(push){try{history.pushState(null,'',location.pathname)}catch(e){}}}
+window.addEventListener('popstate',()=>{const q=new URLSearchParams(location.search);if(q.get('c'))openChamp(q.get('c'),q.get('r')||'',false);else showHome(false)});
+qEl.addEventListener('keydown',e=>{if(e.key==='Enter'){const r=rows();if(r.length)openChamp(r[0].name,r[0].p)}});
+document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.c)pick(b.dataset.c);
+  if(b.dataset.p&&cur)load(cur.champion,b.dataset.p)});
+
+function pick(name){qEl.blur();openChamp(name,'')}
+async function load(name,pos){const n=++reqN;
+  out.innerHTML=`<div class="card load">Loading ${esc(name)}…</div>`;
+  try{const r=await fetch(`/api/build?c=${encodeURIComponent(name)}${pos?'&p='+pos:''}`);const d=await r.json();
+    if(n!==reqN)return;if(!r.ok)throw new Error(d.error||'Error '+r.status);
+    cur=d;if(!V)V=d.version;render(d);
+    try{history.replaceState(history.state,'',`?c=${encodeURIComponent(d.champion)}&r=${d.position}`)}catch(e){}
+    document.title=`${d.champion} ${RN[d.position]||''} build`}
+  catch(e){if(n===reqN)out.innerHTML=`<button id="backBtn" class="back">← All champions</button><div class="card err">${esc(e.message)}</div>`}}
+
+const step=(n,it,sub)=>`<div class="step"><span class="n">${n}</span>${img(itemImg(it.id),'it',it.name)}<span class="nm">${esc(it.name)}</span>${sub?`<span class="meta" style="margin:0">${sub}</span>`:''}</div>`;
+const arrow='<span class="arrow" aria-hidden="true">›</span>';
+
+function render(d){
+  const role=d.roles.find(r=>r.p===d.position);
+  /* every share on the page is out of this champion's own games in this role */
+  const T=(role&&role.play)||0,rl=(RN[d.position]||'').toLowerCase();
+  const share=x=>x&&x.pick!=null?x.pick:null;
+  const of=x=>!x||!x.play?'':`${x.pick!=null?pct(x.pick)+' of games, ':''}${x.play.toLocaleString('en-GB')} games`;
+  const head=`<div class="card"><div class="head">${img(champImg(d.id),'big',d.champion)}<div><h2>${esc(d.champion)}</h2>
+    <div class="stats">${esc(RN[d.position]||d.position)}${role&&role.wr!=null?` · <b>${pct(role.wr)}</b> win rate`:''}${role&&role.play?` · ${role.play.toLocaleString('en-GB')} games`:''} · ${d.region==='EUW'?'EUW':'all regions'} · Emerald+</div></div></div>
+    ${d.roles.length>1?`<div class="roles" role="group" aria-label="Role">${d.roles.map(r=>`<button data-p="${r.p}" aria-pressed="${r.p===d.position}">${RN[r.p]}<small>${r.rate!=null?Math.round(r.rate*100)+'%':''}</small></button>`).join('')}</div>`:''}</div>`;
+
+  /* build: one row per step (start, core, two boots, later items), all icons 44px, stats lined up on the right */
+  const ic=it=>`<span class="ii" title="${esc(it.name)}">${img(itemImg(it.id),'',it.name)}</span>`;
+  const grp=items=>{const m=new Map();items.forEach(i=>m.set(i.name,(m.get(i.name)||0)+1));return [...m].map(([n,c])=>(c>1?c+'× ':'')+esc(n)).join(' + ')};
+  const st=x=>`${x.pick!=null?`<b>${pct(x.pick)}</b> · `:''}${x.play.toLocaleString('en-GB')} games · <span class="${x.wr==null?'':x.wr>=.52?'hi':x.wr<.48?'lo':''}">${x.wr==null?'–':pct(x.wr)} win</span>`;
+  const brow=(lab,x,seq,note)=>`<div class="brow"><span class="lab">${lab}</span><span class="ics">${x.items.map(ic).join(seq?'<span class="gt">›</span>':'')}</span><span class="nm">${seq?x.items.map(i=>esc(i.name)).join(' › '):grp(x.items)}${note?`<small>${note}</small>`:''}</span><span class="st">${st(x)}</span></div>`;
+  const brs=[];
+  if(d.starter)brs.push(brow('Start',d.starter,false,d.starter.items.some(i=>i.added)?'World Atlas added by us: op.gg leaves the support item out of its start stats.':''));
+  if(d.core)brs.push(brow('Core build',d.core,true));
+  [d.boots,d.boots2].filter(Boolean).forEach((x,i)=>brs.push(brow(i?'':'Boots',x)));
+  [['4th item',d.fourth],['5th item',d.fifth],['6th item',d.sixth],['Other popular items',d.late]].forEach(([t,l])=>(l||[]).forEach((x,i)=>brs.push(brow(i?'':t,x))));
+  let b=brs.length?`<div class="card"><h3>Build</h3><div class="blist">${brs.join('')}</div><p class="meta">Pick rate · games · win rate. Pick rate is out of the games where op.gg recorded that item.</p></div>`
+    :'<div class="card empty">OP.GG has no item build for this champion in this role yet.</div>';
+  /* summoner spells */
+  const SS=(d.summs&&d.summs.length?d.summs:(d.summ?[d.summ]:[])).filter(x=>x.spells);
+  const su=SS.length?`<div class="card"><h3>Summoner spells</h3>${SS.map(x=>`<div class="summ">${x.spells.map(y=>`${y.img?img(`${DD}${V}/img/spell/${y.img}`,'',y.name):''}<b>${esc(y.name)}</b>`).join('<span class="gt">+</span>')}<span class="meta" style="margin:0 0 0 auto;text-align:right"><b style="color:var(--ink)">${pct(x.pick)}</b> · ${x.play.toLocaleString('en-GB')} games · ${pct(x.wr)} win</span></div>`).join('')}${SS.length<2?'<div class="meta">Only the most common pair is available right now.</div>':''}</div>`:'';
+  b=su+b;
+
+  /* skill order */
+  let s='';
+  const sp=k=>(d.spells||[]).find(x=>x.key===k);
+  const skBox=k=>{const x=sp(k);return `<span class="sk" title="${esc(x?x.name:k)}">${x&&V?img(`${DD}${V}/img/spell/${x.img}`,''):''}<b>${k}</b></span>`};
+  if(d.skills||d.max){
+    /* OP.GG stops at level 15: fill 16-18 the standard way (R at 16, then the unmaxed basic ability) */
+    const order=d.skills?d.skills.order.slice(0,18):[],given=order.length;
+    if(given){const cnt=k=>order.filter(x=>x===k).length,pri=(d.max&&d.max.order)||['Q','W','E'];
+      while(order.length<18){const lv=order.length+1;
+        if([6,11,16].includes(lv)&&cnt('R')<3){order.push('R');continue}
+        const nx=pri.concat(['Q','W','E']).find(k=>k!=='R'&&cnt(k)<5);if(!nx)break;order.push(nx)}}
+    const rows=['Q','W','E','R'].map(k=>`<tr><th class="k">${skBox(k)}</th>${order.map((x,i)=>`<td class="${x===k?'on'+(k==='R'?' r':''):''}${i>=given?' fill':''}"${i>=given?' title="Standard order (not in OP.GG data)"':''}>${x===k?i+1:''}</td>`).join('')}</tr>`).join('');
+    s=`<div class="card"><h3>Skill order</h3>
+      ${d.max?`<div class="maxline"><span class="meta" style="margin:0">Max</span>${d.max.order.map(skBox).join('<span class="gt">›</span>')}</div>`:''}
+      ${order.length?`<div class="grid"><table><thead><tr><th></th>${order.map((x,i)=>`<th>${i+1}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="meta">${pct(d.skills.wr)} win rate, used in ${of(d.skills)}. Levels 16–18 (faded) follow the standard order.</div>`:''}
+    </div>`}
+  /* counters: who this champion struggles against and who it beats, from its own win rate in the matchup */
+  const byName=n=>LIST.find(c=>norm(c.name)===norm(n));
+  const cRow=c=>{const ch=byName(c.name);return `<button class="crow" data-c="${esc(ch?ch.name:c.name)}">${ch?img(champImg(ch.id),'',c.name):''}<span>${esc(ch?ch.name:c.name)}<small>${c.play.toLocaleString('en-GB')} games</small></span><b>${pct(c.wr)}</b></button>`};
+  const cw=(d.counters&&d.counters.weak)||[],cs=(d.counters&&d.counters.strong)||[];
+  const k=(cw.length||cs.length)?`<div class="card"><h3>Counters</h3><p class="meta" style="margin-top:4px">${esc(d.champion)}'s win rate in the ${esc((RN[d.position]||'').toLowerCase())} matchup. Tap a champion to open it.</p><div class="cols">
+      ${cw.length?`<div class="bad"><h4>Struggles against</h4>${cw.map(cRow).join('')}</div>`:''}
+      ${cs.length?`<div class="good"><h4>Good against</h4>${cs.map(cRow).join('')}</div>`:''}
+    </div></div>`:'<div class="card empty">Not enough games yet for counter picks in this role.</div>';
+  out.innerHTML='<button id="backBtn" class="back">← All champions</button>'+head+b+s+k}
+
+renderSeg();renderTL();
+fetch('/api/champs').then(r=>r.json()).then(d=>{if(!d.list)return;V=d.version;LIST=d.list;{const pe=document.getElementById('patch');if(!pe.textContent)pe.textContent='Patch '+d.version.split('.').slice(0,2).join('.');}renderTL();if(cur)render(cur)}).catch(()=>{});
+fetch('/api/tierlist').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error||'Error '+r.status);TL=d;if(d.patch||d.region)document.getElementById('patch').textContent=(d.patch?'Patch '+d.patch+' · ':'')+(d.region==='EUW'?'EUW':'All regions')+' · Emerald+';renderTL()}).catch(e=>{TLerr='Could not load the tier list: '+e.message;renderTL()});
+const p=new URLSearchParams(location.search);if(p.get('c'))openChamp(p.get('c'),p.get('r')||'',false);
+}
+</script>
+</body>
+</html>
