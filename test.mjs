@@ -92,7 +92,7 @@ const DARIUS = { data: {
   rune_pages: [{ id: 8230, primary_page_id: 8200, secondary_page_id: 8000, play: 7322, win: 3744, pick_rate: 0.4188, builds: [{ primary_rune_ids: [8230, 8226, 8210, 8237], secondary_rune_ids: [9104, 8299], stat_mod_ids: [5005, 5008, 5011], play: 5417, win: 2768, pick_rate: 0.7398 }] },
     { id: 8010, primary_page_id: 8000, secondary_page_id: 8200, play: 5447, win: 2806, pick_rate: 0.3116, builds: [{ primary_rune_ids: [8010, 9111, 9104, 8299], secondary_rune_ids: [8224, 8237], stat_mod_ids: [5005, 5008, 5011], play: 3279, win: 1680, pick_rate: 0.602 }] }, { id: 1, primary_page_id: 8100, secondary_page_id: 8000, play: 5, win: 1, pick_rate: 0.01, builds: [] }],
   counters: [{ champion_id: 240, play: 149, win: 56 }, { champion_id: 103, play: 300, win: 180 }, { champion_id: 62, play: 12, win: 1 }],
-}, meta: { version: '16.23' } };
+}, meta: { version: '16.23', cached_at: '2026-11-25 03:47:39' } };
 ok('EUW champion shape', () => {
   const s = W.shapeWeb(DARIUS, LIST, { 3047: 'Plated Steelcaps', 1055: "Doran's Blade", 2003: 'Health Potion' });
   assert.deepEqual(s.roles.map(r => r.p), ['top', 'jungle']);
@@ -108,6 +108,11 @@ ok('EUW tier list shape', () => {
   const r = W.shapeTierWeb(j, LIST);
   assert.deepEqual(r.top[0], { name: 'Darius', id: 'Darius', tier: 1, wr: 0.51053, pick: 0.0745, ban: 0.18, play: 19564, trend: 3 });
   assert.equal(r.jungle[0].trend, -3); assert.deepEqual(r.mid, []);
+});
+ok('op.gg timestamps', () => {
+  assert.equal(W.opggTime({ analyzed_at: '2026-11-25T03:25:34+09:00' }), Date.parse('2026-11-24T18:25:34Z'));
+  assert.equal(W.opggTime({ cached_at: '2026-11-25 03:47:39' }), Date.parse('2026-11-24T18:47:39Z'), 'cached_at is Korean time');
+  assert.equal(W.opggTime(null), null); assert.equal(W.opggTime({ cached_at: 'nope' }), null);
 });
 ok('parse unknown class + escapes + None', () => {
   const p = W.parseOpgg('class A: x,y,z\n\nA("a\\"b",None,Meta("hi"))');
@@ -211,6 +216,7 @@ assert.deepEqual(d11.summs.map(x => x.spells.map(y => y.name).join('+')), ['Flas
 const d12 = JSON.parse((await get('/api/build?c=Thresh&p=support'))[2]);
 assert.equal(d12.region, 'EUW'); assert.deepEqual(d12.starter.items.map(i => i.name), ['World Atlas', 'Health Potion', 'Health Potion']); assert.equal(d12.starter.items[0].added, true); t++;
 assert.equal(d11.runes[0].keys[0].name, 'Phase Rush'); assert.equal(d11.runes[0].primary.name, 'Sorcery'); assert.equal(d11.runes[0].secondary.name, 'Precision'); assert.equal(d11.runes[0].shards[0].name, 'Attack Speed'); assert.equal(d11.runes[1].keys[0].name, 'Conqueror'); t++;
+assert.equal(d11.opggAt, undefined, 'op.gg cached_at is not a processing time; the tier list here is the backup, so no time'); assert.ok(d11.updated > 0); t++;
 assert.equal(d11.skills.pick, 0.3645); assert.equal(d11.boots.items[0].name, 'Plated Steelcaps'); assert.equal(d11.counters.weak[0].name, 'Kled'); t++;
 
 console.log(`ok: ${t} checks passed`);

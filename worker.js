@@ -181,6 +181,7 @@ async function web(path) {
   return j;
 }
 const arr = a => (Array.isArray(a) ? a : []);
+export const opggTime = m => { if (!m) return null; const s = m.analyzed_at || (m.cached_at ? String(m.cached_at).replace(' ', 'T') + '+09:00' : ''); const t = Date.parse(s); return isFinite(t) ? t : null; };
 const keyMap = list => { const m = {}; for (const c of list || []) m[String(c.key)] = c; return m; };
 export function shapeTierWeb(j, list) {
   const byKey = keyMap(list), roles = { top: [], jungle: [], mid: [], adc: [], support: [] };
@@ -219,11 +220,11 @@ export function shapeWeb(j, list, N) {
   };
 }
 async function tierList() {
-  let v = memGet('tl3'); if (v) return v;
+  let v = memGet('tl4'); if (v) return v;
   const dd = await ddragon();
   try {
     const j = await web(`?tier=${TIER}`);
-    v = { version: dd.version, patch: (j.meta && j.meta.version) || '', region: 'EUW', matches: (j.meta && j.meta.match_count) || 0, roles: shapeTierWeb(j, dd.list), updated: Date.now() };
+    v = { version: dd.version, patch: (j.meta && j.meta.version) || '', region: 'EUW', matches: (j.meta && j.meta.match_count) || 0, opggAt: opggTime(j.meta), roles: shapeTierWeb(j, dd.list), updated: Date.now() };
     if (!Object.values(v.roles).some(a => a.length)) throw new Error('op.gg EUW sent an empty tier list');
   } catch (e) {
     // backup: OP.GG's official feed (all regions, Emerald+)
@@ -231,7 +232,7 @@ async function tierList() {
     v = { version: dd.version, region: 'all', note: e.message, roles: shapeTier(raw, dd.list), updated: Date.now() };
     if (!Object.values(v.roles).some(a => a.length)) throw new HttpError(502, 'OP.GG returned an empty tier list.');
   }
-  memSet('tl3', v, v.region === 'EUW' ? 3 * 3600 : 600);
+  memSet('tl4', v, v.region === 'EUW' ? 3 * 3600 : 600);
   return v;
 }
 
@@ -302,17 +303,19 @@ export async function build(cName, pos) {
     const N = await itemNames(dd.version);
     a = { ...a, starter: { ...a.starter, items: [{ id: 3865, name: N[3865] || 'World Atlas', added: true }, ...a.starter.items] } };
   }
+  // when op.gg last processed its EUW stats: the champion data only says when op.gg answered, so use the tier list's time
+  if (region === 'EUW') { try { const tl = await tierList(); if (tl.region === 'EUW' && tl.opggAt) a = { ...a, opggAt: tl.opggAt }; } catch {} }
   if (a.runes && a.runes.length) { const R = await runeData(dd.version), r1 = i => ({ id: i, name: (R[i] || {}).name || 'Rune ' + i, icon: (R[i] || {}).icon || '' });
     a = { ...a, runes: a.runes.map(x => ({ ...x, primary: r1(x.primary), secondary: r1(x.secondary), keys: x.keys.map(r1), subs: x.subs.map(r1), shards: x.shards.map(i => ({ id: i, name: SHARDS[i] || 'Shard ' + i })) })) }; }
   if (a.summs && a.summs.length) { const S = await summs(dd.version); a = { ...a, summs: a.summs.map(x => ({ ...x, spells: x.ids.map(i => ({ id: i, name: (S[i] || {}).name || 'Spell ' + i, img: (S[i] || {}).img || '' })) })) }; }
-  return { champion: champ.name, id: champ.id, version: dd.version, position, tier: TIER, region, note, ...a, spells: await spells(dd.version, champ.id), updated: Date.now() };
+  return { champion: champ.name, id: champ.id, version: dd.version, position, tier: TIER, region, note, ...a, spells: await spells(dd.version, champ.id), updated: a.fetchedAt || Date.now() };
 }
 
 async function analysisWeb(champ, position, dd) {
-  const k = `w4:${champ.id}:${position}`; let v = memGet(k); if (v) return v;
+  const k = `w6:${champ.id}:${position}`; let v = memGet(k); if (v) return v;
   if (!champ.key || !POS_WEB[position]) throw new Error('no EUW lookup for ' + champ.name);
   const j = await web(`/${champ.key}/${POS_WEB[position]}?tier=${TIER}`);
-  v = shapeWeb(j, dd.list, await itemNames(dd.version));
+  v = { ...shapeWeb(j, dd.list, await itemNames(dd.version)), fetchedAt: Date.now() };
   if (!v.core && !v.skills && !v.summs.length) throw new Error('op.gg EUW has no build for ' + champ.name + ' ' + position);
   memSet(k, v, TTL);
   return v;
@@ -335,7 +338,7 @@ export default {
     }
     if (url.pathname === '/api/tierlist') {
       const cache = typeof caches !== 'undefined' ? caches.default : null;
-      const key = new Request('https://cache.champ-build/v3/tierlist');
+      const key = new Request('https://cache.champ-build/v4/tierlist');
       if (cache) { const hit = await cache.match(key); if (hit) return hit; }
       try {
         const data = await tierList(), res = json(data, 200, 600);
@@ -349,7 +352,7 @@ export default {
       const c = url.searchParams.get('c') || '', p = (url.searchParams.get('p') || '').toLowerCase();
       // shared edge cache, so repeat look-ups don't hit OP.GG
       const cache = typeof caches !== 'undefined' ? caches.default : null;
-      const key = new Request(`https://cache.champ-build/v8/${encodeURIComponent(norm(c))}/${POSITIONS.includes(p) ? p : 'auto'}`);
+      const key = new Request(`https://cache.champ-build/v10/${encodeURIComponent(norm(c))}/${POSITIONS.includes(p) ? p : 'auto'}`);
       if (cache) { const hit = await cache.match(key); if (hit) return hit; }
       try {
         const data = await build(c, p), res = json(data, 200, 600);

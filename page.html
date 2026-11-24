@@ -144,7 +144,7 @@ th.k{width:auto;text-align:left;padding-right:6px;white-space:nowrap;color:var(-
   </div>
   </div>
   <div id="out" aria-live="polite"></div>
-  <p class="foot">Data: OP.GG, EUW, Emerald+ ranked solo/duo, current patch, refreshed every few hours · icons: Riot Data Dragon</p>
+  <p class="foot"><span id="dataTime"></span><br>Data: OP.GG, EUW, Emerald+ ranked solo/duo, current patch · icons: Riot Data Dragon</p>
 </div>
 <script>
 {
@@ -153,6 +153,8 @@ const RN={top:'Top',jungle:'Jungle',mid:'Mid',adc:'Bot',support:'Support'};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const norm=s=>String(s).toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g,'');
 const pct=x=>x==null?'':(x*100).toFixed(1)+'%';
+const when=t=>new Date(t).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+function showTime(d){const el=document.getElementById('dataTime');if(!el)return;el.textContent=!d?'':d.opggAt?`op.gg last processed its EUW stats ${when(d.opggAt)} · fetched by this site ${when(d.updated)}`:d.updated?`Fetched from op.gg ${when(d.updated)}`:''}
 let V='',LIST=[],cur=null,reqN=0;
 const qEl=document.getElementById('q'),out=document.getElementById('out');
 const champImg=id=>V?`${DD}${V}/img/champion/${id}.png`:'';
@@ -182,12 +184,12 @@ document.addEventListener('click',e=>{
   const rb=e.target.closest('button[data-role]');if(rb){role=rb.dataset.role;renderSeg();renderTL();return}
   const sb=e.target.closest('button[data-sort]');if(sb){const k=sb.dataset.sort;if(sortK===k)sortD=-sortD;else{sortK=k;sortD=1}renderTL();return}
   const row=e.target.closest('#tl tr[data-c]');if(row)openChamp(row.dataset.c,row.dataset.r);
-  if(e.target.closest('#backBtn')){if(history.state&&history.state.fromHome)history.back();else showHome(true)}});
+  if(e.target.closest('#backBtn')){const dp=history.state&&history.state.depth;if(dp>0)history.go(-dp);else showHome(true)}});
 document.addEventListener('keydown',e=>{const row=e.target.closest&&e.target.closest('#tl tr[data-c]');if(row&&(e.key==='Enter'||e.key===' ')){e.preventDefault();openChamp(row.dataset.c,row.dataset.r)}});
 const homeCard=()=>document.getElementById('homeCard');
-function openChamp(name,pos,push=true){if(push){const fromHome=!homeCard().hidden||!!(history.state&&history.state.fromHome);try{history.pushState({c:name,fromHome},'',`?c=${encodeURIComponent(name)}${pos?'&r='+pos:''}`)}catch(e){}}
+function openChamp(name,pos,push=true){if(push){const st=history.state||{},depth=!homeCard().hidden?1:st.depth>0?st.depth+1:0;try{history.pushState({c:name,depth},'',`?c=${encodeURIComponent(name)}${pos?'&r='+pos:''}`)}catch(e){}}
   homeCard().hidden=true;load(name,pos||'');try{window.scrollTo({top:0})}catch(e){}}
-function showHome(push){reqN++;cur=null;out.innerHTML='';homeCard().hidden=false;document.title='Champion builds';if(push){try{history.pushState(null,'',location.pathname)}catch(e){}}}
+function showHome(push){reqN++;cur=null;out.innerHTML='';homeCard().hidden=false;document.title='Champion builds';showTime(TL);if(push){try{history.pushState(null,'',location.pathname)}catch(e){}}}
 window.addEventListener('popstate',()=>{const q=new URLSearchParams(location.search);if(q.get('c'))openChamp(q.get('c'),q.get('r')||'',false);else showHome(false)});
 qEl.addEventListener('keydown',e=>{if(e.key==='Enter'){const r=rows();if(r.length)openChamp(r[0].name,r[0].p)}});
 document.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
@@ -268,11 +270,11 @@ function render(d){
       ${cw.length?`<div class="bad"><h4>Struggles against</h4>${cw.map(cRow).join('')}</div>`:''}
       ${cs.length?`<div class="good"><h4>Good against</h4>${cs.map(cRow).join('')}</div>`:''}
     </div></div>`:'<div class="card empty">Not enough games yet for counter picks in this role.</div>';
-  out.innerHTML='<button id="backBtn" class="back">← All champions</button>'+head+b+s+k}
+  out.innerHTML='<button id="backBtn" class="back">← All champions</button>'+head+b+s+k;showTime(d)}
 
 renderSeg();renderTL();
 fetch('/api/champs').then(r=>r.json()).then(d=>{if(!d.list)return;V=d.version;LIST=d.list;{const pe=document.getElementById('patch');if(!pe.textContent)pe.textContent='Patch '+d.version.split('.').slice(0,2).join('.');}renderTL();if(cur)render(cur)}).catch(()=>{});
-fetch('/api/tierlist').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error||'Error '+r.status);TL=d;if(d.patch||d.region)document.getElementById('patch').textContent=(d.patch?'Patch '+d.patch+' · ':'')+(d.region==='EUW'?'EUW':'All regions')+' · Emerald+';renderTL()}).catch(e=>{TLerr='Could not load the tier list: '+e.message;renderTL()});
+fetch('/api/tierlist').then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error||'Error '+r.status);TL=d;if(!homeCard().hidden)showTime(d);if(d.patch||d.region)document.getElementById('patch').textContent=(d.patch?'Patch '+d.patch+' · ':'')+(d.region==='EUW'?'EUW':'All regions')+' · Emerald+';renderTL()}).catch(e=>{TLerr='Could not load the tier list: '+e.message;renderTL()});
 const p=new URLSearchParams(location.search);if(p.get('c'))openChamp(p.get('c'),p.get('r')||'',false);
 }
 </script>
