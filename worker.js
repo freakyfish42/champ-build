@@ -389,10 +389,52 @@ const json = (obj, status = 200, maxAge = 0) => new Response(JSON.stringify(obj)
   status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': maxAge ? `public, max-age=${maxAge}` : 'no-store' },
 });
 
+// ---- setup reports from the Champ Select Companion app ----
+// The app's "Check setup" can send its report here when the player clicks Send. It is forwarded to a
+// private Discord channel through the DISCORD_WEBHOOK secret (set in the Cloudflare dashboard, never in
+// the app). Nothing is stored except short-lived rate-limit counters.
+const REPORT_MAX = 24000;
+const REPORT_PER_IP = 5, REPORT_ALL = 40; // per hour
+async function overLimit(kv, key, max) {
+  if (!kv) return false;
+  const n = +(await kv.get(key)) || 0;
+  if (n >= max) return true;
+  await kv.put(key, String(n + 1), { expirationTtl: 3600 });
+  return false;
+}
+export async function report(request, env) {
+  if (request.method !== 'POST') return json({ error: 'Use POST.' }, 405);
+  if (!env || !env.DISCORD_WEBHOOK) return json({ error: 'Sending reports isn\'t set up yet.' }, 503);
+  if ((+request.headers.get('content-length') || 0) > REPORT_MAX * 2) return json({ error: 'The report is too long.' }, 413);
+  let b;
+  try { b = JSON.parse(await request.text()); } catch { return json({ error: 'Not a report.' }, 400); }
+  const text = b && typeof b.report === 'string' ? b.report : '';
+  if (!text.startsWith('Champ Select Companion ') || !text.includes('setup check')) return json({ error: 'Not a report.' }, 400);
+  if (text.length > REPORT_MAX) return json({ error: 'The report is too long.' }, 413);
+  const from = String((b && b.from) || '').replace(/[^\p{L}\p{N} #._-]/gu, '').trim().slice(0, 40) || 'a teammate';
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown', hour = Math.floor(Date.now() / 3600e3);
+  if (await overLimit(env.DATA, `rl:rep:${hour}:${ip}`, REPORT_PER_IP) || await overLimit(env.DATA, `rl:rep:${hour}:all`, REPORT_ALL)) {
+    return json({ error: 'Too many reports this hour. Try again later.' }, 429);
+  }
+  const worst = /\n✗  /.test(text) ? '✗ something needs fixing' : /\n!  /.test(text) ? '! working, with notes' : '✓ all fine';
+  const first = text.split('\n')[0].replace('Champ Select Companion ', '');
+  const form = new FormData();
+  form.append('payload_json', JSON.stringify({
+    username: 'Champ Select Companion',
+    content: `Setup report from **${from}**: ${worst} (${first})`,
+    allowed_mentions: { parse: [] }, // the report can never ping anyone
+  }));
+  form.append('files[0]', new Blob([text], { type: 'text/plain' }), 'setup-report.txt');
+  const r = await fetch(env.DISCORD_WEBHOOK, { method: 'POST', body: form });
+  if (!r.ok) return json({ error: `Discord didn't take it (${r.status}).` }, 502);
+  return json({ ok: true });
+}
+
 export default {
   async fetch(request, env, ctx) {
     KV = (env && env.DATA) || null;
     const url = new URL(request.url);
+    if (url.pathname === '/api/report') return report(request, env);
     if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405 });
     if (url.pathname === '/' || url.pathname === '/index.html') {
       return new Response(PAGE, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' } });

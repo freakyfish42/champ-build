@@ -46,3 +46,9 @@ PUT /accounts/{account_id}/workers/scripts/champ-build   (multipart)
 ```
 
 Always include the KV binding in the metadata, or the stored builds stop being used. The cron schedule is set once with `PUT /accounts/{account_id}/workers/scripts/champ-build/schedules` and body `[{"cron":"*/10 * * * *"}]`.
+
+## Setup reports (`POST /api/report`)
+The Champ Select Companion's "Check setup" sends its report here, only when the player clicks Yes. The Worker
+forwards it as a file to a private Discord channel through the secret **DISCORD_WEBHOOK** (Workers → champ-build →
+Settings → Variables and Secrets). No mentions can ping; 5 reports per address and 40 in total per hour (KV
+counters, 1 h). Nothing else is stored. Without the secret it answers 503.

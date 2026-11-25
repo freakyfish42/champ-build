@@ -243,3 +243,41 @@ assert.equal(d11.skills.pick, 0.3645); assert.equal(d11.boots.items[0].name, 'Pl
   assert.equal(await W2.stored('nobody', ''), null); t++;
 }
 console.log(`ok: ${t} checks passed`);
+
+// ---- /api/report: forwarded to Discord, never pings, rate-limited, refuses junk ----
+{
+  const sent = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (u, o) => {
+    if (String(u).startsWith('https://discord.test/')) { sent.push(o.body); return new Response(null, { status: 204 }); }
+    return realFetch(u, o);
+  };
+  const store = new Map();
+  const kv = { get: async k => store.get(k) ?? null, put: async (k, v) => { store.set(k, v); } };
+  const env = { DATA: kv, DISCORD_WEBHOOK: 'https://discord.test/api/webhooks/1/x' };
+  const rep = 'Champ Select Companion v1.0.0 · setup check 2026-11-25 12:00\n\n✓  League client: Connected\n!  Settings: Test mode is on\n';
+  const post = (body, ip = '1.2.3.4', e = env) => W.default.fetch(new Request('https://build.test/api/report', {
+    method: 'POST', body: typeof body === 'string' ? body : JSON.stringify(body), headers: { 'cf-connecting-ip': ip },
+  }), e, {});
+
+  let r = await post({ report: rep, from: 'Faker#KR1 @everyone <b>' });
+  assert.equal(r.status, 200, await r.clone().text());
+  assert.equal(sent.length, 1);
+  const payload = JSON.parse(await sent[0].get('payload_json'));
+  assert.deepEqual(payload.allowed_mentions, { parse: [] });
+  assert.ok(payload.content.includes('**Faker#KR1 everyone b**'), payload.content);
+  assert.ok(payload.content.includes('! working, with notes'));
+  assert.equal(await sent[0].get('files[0]').text(), rep);
+
+  assert.equal((await post({ report: 'hello' })).status, 400);
+  assert.equal((await post('not json')).status, 400);
+  assert.equal((await post({ report: rep + 'x'.repeat(30000) })).status, 413);
+  assert.equal((await W.default.fetch(new Request('https://build.test/api/report'), env, {})).status, 405);
+  assert.equal((await post({ report: rep }, '1.2.3.4', { DATA: kv })).status, 503);
+  for (let i = 0; i < 4; i++) assert.equal((await post({ report: rep })).status, 200);
+  assert.equal((await post({ report: rep })).status, 429, 'sixth report in an hour from one address');
+  assert.equal((await post({ report: rep }, '5.6.7.8')).status, 200, 'another address still gets through');
+  assert.equal(sent.length, 6);
+  globalThis.fetch = realFetch;
+  console.log('report ok');
+}
