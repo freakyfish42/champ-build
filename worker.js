@@ -206,7 +206,7 @@ export function shapeWeb(j, list, N) {
   // skill order: the top build of the top max order (what op.gg's page shows)
   const sm = arr(d.skill_masteries)[0], sk = (sm && arr(sm.builds)[0]) || arr(d.skills)[0];
   // counters: win = this champion's wins against that opponent; skip tiny samples
-  const cs = arr(d.counters).map(c => { const ch = byKey[String(c.champion_id)]; return ch && c.play >= 40 ? { name: ch.name, wr: c.win / c.play, play: c.play } : null; }).filter(Boolean);
+  const cs = arr(d.counters).map(c => { const ch = byKey[String(c.champion_id)]; return ch && c.play >= 40 ? { id: ch.id, name: ch.name, wr: c.win / c.play, play: c.play } : null; }).filter(Boolean);
   return {
     roles,
     starter: wItems(arr(d.starter_items)[0], N), boots: wItems(arr(d.boots)[0], N), boots2: wItems(arr(d.boots)[1], N), core: wItems(arr(d.core_items)[0], N),
@@ -216,6 +216,8 @@ export function shapeWeb(j, list, N) {
     skills: sk && arr(sk.order).length ? { order: sk.order, wr: sk.play ? sk.win / sk.play : null, pick: rate(sk.pick_rate), play: sk.play || 0 } : null,
     max: sm && arr(sm.ids).length ? { order: sm.ids, wr: sm.play ? sm.win / sm.play : null, pick: rate(sm.pick_rate) } : null,
     counters: { weak: [...cs].sort((a, b) => a.wr - b.wr).slice(0, 6), strong: [...cs].sort((a, b) => b.wr - a.wr).slice(0, 6) },
+    // every matchup with 40+ games (this champion's win rate against each), for the companion app's lane matchup
+    vs: cs.map(c => ({ id: c.id, name: c.name, wr: Math.round(c.wr * 10000) / 10000, play: c.play })),
     runes: arr(d.rune_pages).slice(0, 2).map(p => { const b = arr(p.builds)[0] || p; return { primary: +p.primary_page_id, secondary: +p.secondary_page_id, keys: arr(b.primary_rune_ids).map(Number), subs: arr(b.secondary_rune_ids).map(Number), shards: arr(b.stat_mod_ids).map(Number), wr: p.play ? p.win / p.play : null, pick: rate(p.pick_rate), play: p.play || 0 }; }).filter(r => r.keys.length),
     summs: arr(d.summoner_spells).slice(0, 2).map(x => ({ ids: arr(x.ids).map(Number), wr: x.play ? x.win / x.play : null, pick: rate(x.pick_rate), play: x.play || 0 })).filter(x => x.ids.length),
   };
@@ -379,7 +381,8 @@ export async function stored(cName, pos) {
   if (!ref || !ref.c || Date.now() - ref.at > STORED_MAX_AGE) return null;
   const chunk = await KV.get(ref.c, { type: 'json', cacheTtl: 300 });
   const b = chunk && chunk[id + ':' + role];
-  return b ? { ...b, opggAt: tl.opggAt || b.opggAt } : null;
+  if (!b || (b.region === 'EUW' && !b.vs)) return null; // stored before matchups were added: fetch it fresh instead
+  return { ...b, opggAt: tl.opggAt || b.opggAt };
 }
 
 const json = (obj, status = 200, maxAge = 0) => new Response(JSON.stringify(obj), {
@@ -414,7 +417,7 @@ export default {
       const c = url.searchParams.get('c') || '', p = (url.searchParams.get('p') || '').toLowerCase();
       // shared edge cache, so repeat look-ups don't hit OP.GG
       const cache = typeof caches !== 'undefined' ? caches.default : null;
-      const key = new Request(`https://cache.champ-build/v10/${encodeURIComponent(norm(c))}/${POSITIONS.includes(p) ? p : 'auto'}`);
+      const key = new Request(`https://cache.champ-build/v11/${encodeURIComponent(norm(c))}/${POSITIONS.includes(p) ? p : 'auto'}`);
       if (cache) { const hit = await cache.match(key); if (hit) return hit; }
       try {
         const data = (await stored(c, p).catch(() => null)) || (await build(c, p)), res = json(data, 200, 600);

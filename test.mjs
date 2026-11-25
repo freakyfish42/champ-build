@@ -102,6 +102,7 @@ ok('EUW champion shape', () => {
   assert.equal(s.runes.length, 2); assert.equal(s.runes[0].pick, 0.4188); assert.equal(s.runes[0].play, 7322); assert.deepEqual(s.runes[0].keys, [8230, 8226, 8210, 8237]); assert.deepEqual(s.runes[1].subs, [8224, 8237]);
   assert.equal(s.counters.weak[0].name, 'Kled'); assert.ok(Math.abs(s.counters.weak[0].wr - 56 / 149) < 1e-12);
   assert.equal(s.counters.strong[0].name, 'Ahri'); assert.equal(s.counters.weak.length, 2, 'matchups under 40 games are skipped');
+  assert.deepEqual(s.vs.map(v => v.id), ['Kled', 'Ahri'], 'every matchup with 40+ games, for the companion'); assert.equal(s.vs[0].play, 149); assert.equal(s.vs[0].wr, Math.round(56 / 149 * 10000) / 10000);
 });
 ok('EUW tier list shape', () => {
   const j = { data: [{ id: 122, positions: [{ name: 'TOP', stats: { play: 19564, win_rate: 0.51053, pick_rate: 0.0745, ban_rate: 0.18, tier_data: { tier: 1, rank: 2, rank_prev: 5 } } }, { name: 'JUNGLE', stats: { play: 3797, win_rate: 0.52, pick_rate: 0.014, ban_rate: 0.18, tier_data: { tier: 3, rank: 25, rank_prev: 22 } } }] }, { id: 999, positions: [{ name: 'MID', stats: { play: 5 } }] }] };
