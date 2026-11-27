@@ -530,6 +530,7 @@ export async function collectJungle(env, kv = env.DATA) {
     }
   } catch (e) { if (!(e instanceof RiotLimit)) done.errors++; done.stop = e.message; }
   st.seen = st.seen.slice(-4000);
+  st.last = { at: new Date().toISOString(), calls: budget.calls, matches: done.matches, stop: done.stop || '' }; // the last run, for checking on it
   await kv.put('jg:state', JSON.stringify(st));
   if (done.matches) await kv.put('jg:agg', JSON.stringify(agg));
   return { ...done, calls: budget.calls, games: agg ? agg.games : 0 };
