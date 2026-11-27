@@ -498,27 +498,76 @@ async function riot(env, url, state) {
   return r.json();
 }
 
-// one cron run: top up the player list from the ranked ladder, find new matches, read as many as the budget allows
+// Champions to log first (the owner asked for Shyvana first, 2026-11-27). Riot can't search games by champion, so
+// the collector looks for their players: it checks ladder players' champion mastery, and for those who play the
+// champion a lot and lately it reads their recent games, keeping the ones where they jungled it. Each run spends
+// up to JG_FOCUS_CALLS of its calls on this until the champion has JG_FOCUS_ENOUGH games on each side.
+export const JG_FOCUS = [{ name: 'Shyvana', id: 102 }];
+const JG_FOCUS_ENOUGH = 200, JG_FOCUS_CALLS = 28, JG_SCOUT = 8;
+export function focusNeeded(agg) {
+  return JG_FOCUS.filter(f => {
+    const c = agg && agg.champs && agg.champs[norm(f.name)];
+    return !c || Math.min((c.blue || {}).n || 0, (c.red || {}).n || 0) < JG_FOCUS_ENOUGH;
+  });
+}
+
+// the next page of the ranked ladder: Master and up, then Emerald/Diamond pages, round and round
+async function refillLadder(env, st, budget, done) {
+  const n = st.ladder++ % (JG_TIERS.length * JG_DIVS.length * 3 + JG_APEX.length);
+  let rows;
+  if (n < JG_APEX.length) {
+    const l = await riot(env, `${RIOT_PLAT}/lol/league/v4/${JG_APEX[n]}leagues/by-queue/RANKED_SOLO_5x5`, budget);
+    rows = (l && l.entries) || [];
+  } else {
+    const m = n - JG_APEX.length, tier = JG_TIERS[Math.floor(m / (JG_DIVS.length * 3)) % JG_TIERS.length];
+    const div = JG_DIVS[Math.floor(m / 3) % JG_DIVS.length], page = (m % 3) + 1;
+    rows = (await riot(env, `${RIOT_PLAT}/lol/league/v4/entries/RANKED_SOLO_5x5/${tier}/${div}?page=${page}`, budget)) || [];
+  }
+  st.players = rows.map(e => e.puuid).filter(Boolean).sort(() => Math.random() - 0.5).slice(0, 150);
+  done.ladder = { rows: rows.length, withPuuid: st.players.length, keys: rows[0] ? Object.keys(rows[0]).join(',') : '' };
+}
+
+// one cron run: first the focus champions, then any ranked games with the calls left
 export async function collectJungle(env, kv = env.DATA) {
   if (!env.RIOT_KEY || !kv) return { skipped: 'no key' };
   const st = (await kv.get('jg:state', { type: 'json' })) || { players: [], matches: [], seen: [], ladder: 0 };
+  st.focus ||= { players: [], matches: [] };
   let agg = await kv.get('jg:agg', { type: 'json' });
-  const budget = { calls: 0 }, done = { matches: 0, errors: 0 };
+  const budget = { calls: 0 }, done = { matches: 0, errors: 0, focus: 0, found: 0 };
+  const read = async id => {
+    const match = await riot(env, `${RIOT_REG}/lol/match/v5/matches/${id}`, budget);
+    return { match, tl: match ? await riot(env, `${RIOT_REG}/lol/match/v5/matches/${id}/timeline`, budget) : null };
+  };
   try {
-    if (st.players.length === 0 && st.matches.length < 10) {
-      const n = st.ladder++ % (JG_TIERS.length * JG_DIVS.length * 3 + JG_APEX.length);
-      let rows;
-      if (n < JG_APEX.length) {
-        const l = await riot(env, `${RIOT_PLAT}/lol/league/v4/${JG_APEX[n]}leagues/by-queue/RANKED_SOLO_5x5`, budget);
-        rows = (l && l.entries) || [];
+    const need = focusNeeded(agg), names = new Set(need.map(f => f.name));
+    while (need.length && budget.calls < JG_FOCUS_CALLS) {
+      if (st.focus.matches.length) {
+        const id = st.focus.matches.pop();
+        if (st.seen.includes(id)) continue;
+        const match = await riot(env, `${RIOT_REG}/lol/match/v5/matches/${id}`, budget);
+        st.seen.push(id);
+        const info = match && match.info;
+        if (!info || info.queueId !== 420 || !(info.participants || []).some(p => p.teamPosition === 'JUNGLE' && names.has(p.championName))) continue;
+        const tl = await riot(env, `${RIOT_REG}/lol/match/v5/matches/${id}/timeline`, budget);
+        if (tl) { agg = addPaths(agg, info.gameVersion, junglePaths(match, tl)); done.matches++; done.focus++; }
+      } else if (st.focus.players.length) {
+        const since = Math.floor(Date.now() / 1000) - 14 * 86400;
+        const ids = await riot(env, `${RIOT_REG}/lol/match/v5/matches/by-puuid/${st.focus.players.shift()}/ids?queue=420&type=ranked&start=0&count=20&startTime=${since}`, budget);
+        for (const m of ids || []) if (!st.seen.includes(m) && !st.focus.matches.includes(m)) st.focus.matches.push(m);
       } else {
-        const m = n - JG_APEX.length, tier = JG_TIERS[Math.floor(m / (JG_DIVS.length * 3)) % JG_TIERS.length];
-        const div = JG_DIVS[Math.floor(m / 3) % JG_DIVS.length], page = (m % 3) + 1;
-        rows = (await riot(env, `${RIOT_PLAT}/lol/league/v4/entries/RANKED_SOLO_5x5/${tier}/${div}?page=${page}`, budget)) || [];
+        if (!st.players.length) await refillLadder(env, st, budget, done);
+        let scouted = 0;
+        while (scouted < JG_SCOUT && st.players.length && budget.calls < JG_FOCUS_CALLS) {
+          const pu = st.players.pop(); scouted++;
+          for (const f of need) {
+            const m = await riot(env, `${RIOT_PLAT}/lol/champion-mastery/v4/champion-masteries/by-puuid/${pu}/by-champion/${f.id}`, budget);
+            if (m && m.championPoints >= 30000 && Date.now() - m.lastPlayTime < 14 * 86400e3) { st.focus.players.push(pu); done.found++; break; }
+          }
+        }
+        if (!st.focus.players.length) break; // nobody this time: the rest of the run goes to other games
       }
-      st.players = rows.map(e => e.puuid).filter(Boolean).sort(() => Math.random() - 0.5).slice(0, 150);
-      done.ladder = { rows: rows.length, withPuuid: st.players.length, keys: rows[0] ? Object.keys(rows[0]).join(',') : '' };
     }
+    if (st.players.length === 0 && st.matches.length < 10) await refillLadder(env, st, budget, done);
     const since = Math.floor(Date.now() / 1000) - 4 * 86400;
     while (st.matches.length < 10 && st.players.length) {
       const id = await riot(env, `${RIOT_REG}/lol/match/v5/matches/by-puuid/${st.players.pop()}/ids?queue=420&type=ranked&start=0&count=10&startTime=${since}`, budget);
@@ -526,15 +575,16 @@ export async function collectJungle(env, kv = env.DATA) {
     }
     while (st.matches.length) {
       const id = st.matches[st.matches.length - 1];
-      const match = await riot(env, `${RIOT_REG}/lol/match/v5/matches/${id}`, budget);
-      const tl = match ? await riot(env, `${RIOT_REG}/lol/match/v5/matches/${id}/timeline`, budget) : null;
+      if (st.seen.includes(id)) { st.matches.pop(); continue; }
+      const { match, tl } = await read(id);
       st.matches.pop(); st.seen.push(id);
       if (match && tl) { agg = addPaths(agg, match.info && match.info.gameVersion, junglePaths(match, tl)); done.matches++; }
     }
   } catch (e) { if (!(e instanceof RiotLimit)) done.errors++; done.stop = e.message; }
   st.seen = st.seen.slice(-4000);
-  st.last = { at: new Date().toISOString(), calls: budget.calls, matches: done.matches, stop: done.stop || '', ladder: done.ladder || null,
-    key: { length: riotKey(env).length, looksRight: /^RGAPI-[0-9a-f-]{36}$/.test(riotKey(env)) } }; // never the key itself // the last run, for checking on it
+  st.focus.players = st.focus.players.slice(0, 200); st.focus.matches = st.focus.matches.slice(-400);
+  st.last = { at: new Date().toISOString(), calls: budget.calls, matches: done.matches, focus: done.focus, found: done.found, stop: done.stop || '', ladder: done.ladder || null,
+    key: { length: riotKey(env).length, looksRight: /^RGAPI-[0-9a-f-]{36}$/.test(riotKey(env)) } }; // never the key itself
   await kv.put('jg:state', JSON.stringify(st));
   if (done.matches) await kv.put('jg:agg', JSON.stringify(agg));
   return { ...done, calls: budget.calls, games: agg ? agg.games : 0 };

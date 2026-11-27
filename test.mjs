@@ -347,4 +347,36 @@ ok('jungle tally and view', () => {
   ok('jungle api needs a champion', () => assert.equal(bad.status, 400));
 }
 
+
+// focus champions (Shyvana first): players found by mastery, their Shyvana jungle games read first
+{
+  const kv = new Map();
+  const KVm = { get: async k => kv.has(k) ? JSON.parse(kv.get(k)) : null, put: async (k, v) => { kv.set(k, v); } };
+  const real = globalThis.fetch; const urls = [];
+  const SHY = { info: { ...MATCH.info, participants: MATCH.info.participants.map(p => p.participantId === 1 ? { ...p, championName: 'Shyvana' } : p) } };
+  globalThis.fetch = async (url, init) => {
+    url = String(url); urls.push(url);
+    const j = o => ({ ok: true, status: 200, json: async () => o });
+    if (url.includes('leagues/by-queue')) return j({ entries: Array.from({ length: 20 }, (_, i) => ({ puuid: 'p' + i })) });
+    if (url.includes('/champion-mastery/')) return url.includes('/p3/') ? j({ championId: 102, championPoints: 250000, lastPlayTime: Date.now() - 86400e3 }) : { ok: false, status: 404, json: async () => ({}) };
+    if (url.includes('/by-puuid/p3/ids')) return j(['EUW1_S1', 'EUW1_S2', 'EUW1_X']);
+    if (url.includes('/ids?')) return j(['EUW1_G' + urls.length]);
+    if (url.endsWith('/timeline')) return j(TL);
+    if (url.includes('/matches/EUW1_X')) return j(MATCH); // p3 played something else here
+    if (url.includes('/matches/EUW1_S')) return j(SHY);
+    if (url.includes('/matches/EUW1_G')) return j(MATCH);
+    return { ok: false, status: 404, json: async () => ({}) };
+  };
+  ok('focus list', () => assert.deepEqual(W.focusNeeded(null).map(f => f.name), ['Shyvana']));
+  let r; for (let i = 0; i < 4; i++) r = await W.collectJungle({ RIOT_KEY: 'k' }, KVm);
+  globalThis.fetch = real;
+  const agg = JSON.parse(kv.get('jg:agg')), st = JSON.parse(kv.get('jg:state'));
+  ok('focus champion games read first', () => {
+    assert.equal(agg.champs.shyvana.blue.n, 2, 'both Shyvana games');
+    assert.ok(!urls.some(u => u.includes('EUW1_X/timeline')), 'no timeline for a game without Shyvana in the jungle');
+    assert.ok(urls.filter(u => u.includes('/champion-mastery/')).length <= 4 * 28, 'scouting stays within the focus share of each run');
+    assert.ok(st.last.calls <= 40);
+  });
+}
+
 console.log(`ok: ${t} checks passed`);
