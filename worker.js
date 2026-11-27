@@ -515,6 +515,7 @@ export async function collectJungle(env, kv = env.DATA) {
         rows = (await riot(env, `${RIOT_PLAT}/lol/league/v4/entries/RANKED_SOLO_5x5/${tier}/${div}?page=${page}`, budget)) || [];
       }
       st.players = rows.map(e => e.puuid).filter(Boolean).sort(() => Math.random() - 0.5).slice(0, 150);
+      done.ladder = { rows: rows.length, withPuuid: st.players.length, keys: rows[0] ? Object.keys(rows[0]).join(',') : '' };
     }
     const since = Math.floor(Date.now() / 1000) - 4 * 86400;
     while (st.matches.length < 10 && st.players.length) {
@@ -530,7 +531,7 @@ export async function collectJungle(env, kv = env.DATA) {
     }
   } catch (e) { if (!(e instanceof RiotLimit)) done.errors++; done.stop = e.message; }
   st.seen = st.seen.slice(-4000);
-  st.last = { at: new Date().toISOString(), calls: budget.calls, matches: done.matches, stop: done.stop || '' }; // the last run, for checking on it
+  st.last = { at: new Date().toISOString(), calls: budget.calls, matches: done.matches, stop: done.stop || '', ladder: done.ladder || null }; // the last run, for checking on it
   await kv.put('jg:state', JSON.stringify(st));
   if (done.matches) await kv.put('jg:agg', JSON.stringify(agg));
   return { ...done, calls: budget.calls, games: agg ? agg.games : 0 };
