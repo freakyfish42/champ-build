@@ -242,4 +242,108 @@ assert.equal(d11.skills.pick, 0.3645); assert.equal(d11.boots.items[0].name, 'Pl
   webCalls.length = 0; webUp = true; const r2 = await W2.warm({ DATA }); assert.ok(webCalls.some(u => /\/ranked\?tier=/.test(u)), 'the refresh always asks op.gg for the latest tier list'); assert.equal(r2.refreshed, 2); assert.equal(puts.filter(k => k.startsWith('chunk:')).length, 2); t++;
   assert.equal(await W2.stored('nobody', ''), null); t++;
 }
+
+// ---- jungle paths ----
+ok('jungle places', () => {
+  assert.equal(W.place({ x: 7800, y: 4100 }, 100), 'Red');
+  assert.equal(W.place({ x: 7800, y: 4100 }, 200), 'Enemy Red');
+  assert.equal(W.place({ x: 14870 - 3800, y: 14870 - 7950 }, 200), 'Blue');
+  assert.equal(W.place({ x: 4400, y: 9650 }, 100), 'Top scuttle');
+  assert.equal(W.place({ x: 500, y: 500 }, 100), 'Base');
+  assert.equal(W.place({ x: 600, y: 11000 }, 100), 'Top lane');
+  assert.equal(W.place({ x: 7400, y: 7400 }, 100), 'Mid lane');
+  assert.equal(W.place(null, 100), null);
+});
+const frame = (pos) => ({ participantFrames: Object.fromEntries(pos.map((p, i) => [String(i + 1), { position: { x: p[0], y: p[1] }, level: 1 }])) });
+const MATCH = { info: { queueId: 420, gameDuration: 1700, gameVersion: '16.23.733.1234', participants: [
+  { participantId: 1, championName: 'MonkeyKing', teamPosition: 'JUNGLE', teamId: 100, win: true },
+  { participantId: 2, championName: 'Ahri', teamPosition: 'MIDDLE', teamId: 100, win: true },
+  { participantId: 3, championName: 'LeeSin', teamPosition: 'JUNGLE', teamId: 200, win: false },
+] } };
+const R = 14870;
+const TL = { info: { frames: [
+  frame([[400, 420], [400, 420], [R - 400, R - 420]]),
+  frame([[7800, 4100], [7400, 7400], [R - 6950, R - 5450]]),   // 1:00 Red | Raptors (red side's own)
+  frame([[6950, 5450], [7400, 7400], [R - 7800, R - 4100]]),   // 2:00 Raptors | Red
+  frame([[3800, 7950], [7400, 7400], [R - 8400, R - 2700]]),   // 3:00 Blue | Krugs
+  frame([[4400, 9650], [7400, 7400], [600, 11000]]),           // 4:00 Top scuttle | Top lane
+] } };
+ok('jungle paths from a timeline', () => {
+  const rows = W.junglePaths(MATCH, TL);
+  assert.deepEqual(rows, [
+    { champ: 'MonkeyKing', team: 100, win: true, path: ['Red', 'Raptors', 'Blue', 'Top scuttle'] },
+    { champ: 'LeeSin', team: 200, win: false, path: ['Raptors', 'Red', 'Krugs', 'Top lane'] },
+  ]);
+  assert.deepEqual(W.junglePaths({ info: { ...MATCH.info, queueId: 450 } }, TL), [], 'only ranked solo');
+  assert.deepEqual(W.junglePaths({ info: { ...MATCH.info, gameDuration: 300 } }, TL), [], 'no remakes');
+});
+ok('jungle tally and view', () => {
+  let agg = null;
+  const rows = W.junglePaths(MATCH, TL);
+  for (let i = 0; i < 12; i++) agg = W.addPaths(agg, '16.23.1', rows);
+  agg = W.addPaths(agg, '16.23.1', [{ champ: 'MonkeyKing', team: 100, win: false, path: ['Blue', 'Gromp', 'Wolves', 'Mid lane'] }]);
+  assert.equal(agg.games, 13);
+  const v = W.jungleView(agg, 'Wukong'.replace('Wukong', 'MonkeyKing'));
+  assert.equal(v.blue.games, 13);
+  assert.deepEqual(v.blue.paths[0].path, ['Red', 'Raptors', 'Blue', 'Top scuttle']);
+  assert.equal(v.blue.paths[0].games, 12);
+  assert.equal(v.blue.start[0].camp, 'Red');
+  assert.equal(v.red, null, 'Wukong never on red here');
+  assert.equal(W.jungleView(agg, 'Lee Sin').red.games, 12, 'looked up by display name');
+  assert.equal(W.jungleView(agg, 'Ahri').blue, null, 'no jungle Ahri');
+  // an older patch's match doesn't reset; a newer one does but keeps the old tally meanwhile
+  assert.equal(W.addPaths(agg, '16.9.1', rows).patch, '16.23');
+  for (let i = 0; i < 300; i++) agg = W.addPaths(agg, '16.23.1', rows);
+  const next = W.addPaths(agg, '16.24.1', rows);
+  assert.equal(next.patch, '16.24');
+  assert.equal(next.prev.patch, '16.23', 'old tally kept for now');
+  assert.equal(W.jungleView(next, 'MonkeyKing').blue.patch, '16.23', 'only 1 game in 16.24: shows 16.23');
+  for (let i = 0; i < 10; i++) agg = W.addPaths(next, '16.24.1', rows);
+  assert.equal(W.jungleView(agg, 'MonkeyKing').blue.patch, '16.24', '10+ games in 16.24: shows 16.24');
+});
+
+
+// the collector: ladder → match ids → matches + timelines, within the call budget, stops on 429
+{
+  const kv = new Map();
+  const KVm = { get: async (k, o) => kv.has(k) ? JSON.parse(kv.get(k)) : null, put: async (k, v) => { kv.set(k, v); } };
+  const real = globalThis.fetch; const riotCalls = []; let limit = false;
+  globalThis.fetch = async (url, init) => {
+    url = String(url);
+    if (!url.includes('riotgames.com')) return real(url, init);
+    riotCalls.push(url);
+    assert.equal(init.headers['X-Riot-Token'], 'k', 'key sent as a header, never in the URL');
+    const j = o => ({ ok: true, status: 200, json: async () => o });
+    if (limit) return { ok: false, status: 429, json: async () => ({}) };
+    if (url.includes('leagues/by-queue')) return j({ entries: Array.from({ length: 20 }, (_, i) => ({ puuid: 'p' + i })) });
+    if (url.includes('/entries/')) return j(Array.from({ length: 20 }, (_, i) => ({ puuid: 'q' + i })));
+    if (url.includes('/ids?')) { const n = riotCalls.length; return j([`EUW1_${n}a`, `EUW1_${n}b`, `EUW1_${n}c`]); }
+    if (url.endsWith('/timeline')) return j(TL);
+    if (/\/matches\/EUW1_/.test(url)) return j(MATCH);
+    return { ok: false, status: 404, json: async () => ({}) };
+  };
+  ok('jungle collector: no key, nothing', () => {});
+  assert.deepEqual(await W.collectJungle({}, KVm), { skipped: 'no key' });
+  const r = await W.collectJungle({ RIOT_KEY: 'k' }, KVm);
+  ok('jungle collector run', () => {
+    assert.ok(riotCalls.length <= 40, 'call budget: ' + riotCalls.length);
+    assert.ok(r.matches >= 10, 'matches read: ' + r.matches);
+    const agg = JSON.parse(kv.get('jg:agg')), st = JSON.parse(kv.get('jg:state'));
+    assert.equal(agg.games, r.matches);
+    assert.equal(st.seen.length, r.matches);
+    assert.ok(!riotCalls.some(u => u.includes('k=') || u.includes('api_key')));
+  });
+  const before = riotCalls.length; limit = true;
+  const r2 = await W.collectJungle({ RIOT_KEY: 'k' }, KVm);
+  ok('jungle collector stops on 429', () => { assert.equal(riotCalls.length - before, 1); assert.equal(r2.stop, '429'); assert.equal(r2.errors, 0); });
+  globalThis.fetch = real;
+  // the API answers from the tally
+  const KVsave = kv;
+  const resp = await W.default.fetch(new Request('https://x/api/jungle?c=Wukong'), { DATA: KVm }, { waitUntil() {} });
+  const jv = await resp.json();
+  ok('jungle api by display name', () => { assert.equal(resp.status, 200); assert.equal(jv.champion, 'MonkeyKing'); assert.deepEqual(jv.blue.paths[0].path, ['Red', 'Raptors', 'Blue', 'Top scuttle']); });
+  const bad = await W.default.fetch(new Request('https://x/api/jungle'), { DATA: KVm }, { waitUntil() {} });
+  ok('jungle api needs a champion', () => assert.equal(bad.status, 400));
+}
+
 console.log(`ok: ${t} checks passed`);

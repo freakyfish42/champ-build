@@ -385,6 +385,156 @@ export async function stored(cName, pos) {
   return { ...b, opggAt: tl.opggAt || b.opggAt };
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// Jungle paths, from Riot's own match data (EUW, Emerald+ ranked solo). Riot's match timelines say where every player
+// stood once a minute, so for each jungler we note the place at 1:00, 2:00, 3:00 and 4:00 (a camp, a scuttle crab,
+// a lane, the base) and count the most common routes per champion and map side. Once a minute is coarse: it shows
+// where the first clear starts and which way it goes, not every camp. The cron collects a few matches each run with
+// the RIOT_KEY secret (Riot personal key: 20 calls/s, 100 per 2 min, shared with the Clash helper).
+// ---------------------------------------------------------------------------------------------------------------
+const RIOT_PLAT = 'https://euw1.api.riotgames.com', RIOT_REG = 'https://europe.api.riotgames.com';
+const JG_TIERS = ['EMERALD', 'DIAMOND'], JG_DIVS = ['I', 'II', 'III', 'IV'], JG_APEX = ['master', 'grandmaster', 'challenger'];
+export const JG_CRON = '5-59/10 * * * *';
+const JG_CALLS = 40;        // Riot calls per cron run (Workers' free plan allows 50 subrequests per run)
+const JG_TOP = 40;          // routes kept per champion and side
+// Summoner's Rift camp centres (game units, 0..14870; blue side bottom left). Red side is the mirror image.
+const BLUE_CAMPS = { Blue: [3800, 7950], Gromp: [2150, 8450], Wolves: [3750, 6550], Raptors: [6950, 5450], Red: [7800, 4100], Krugs: [8400, 2700] };
+const MAP = 14870, mirror = ([x, y]) => [MAP - x, MAP - y];
+const CAMPS = { 100: BLUE_CAMPS, 200: Object.fromEntries(Object.entries(BLUE_CAMPS).map(([k, p]) => [k, mirror(p)])) };
+const SCUTTLE = { 'Top scuttle': [4400, 9650], 'Bot scuttle': [10450, 5200] };
+const FOUNTAIN = { 100: [400, 420], 200: [14340, 14390] };
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+
+// where a jungler of team (100 blue, 200 red) is: their own camp ("Red"), the enemy's ("Enemy Red"), a scuttle,
+// a lane, the river, the base, or just "Jungle"
+export function place(pos, team) {
+  if (!pos || typeof pos.x !== 'number') return null;
+  const p = [pos.x, pos.y], enemy = team === 100 ? 200 : 100;
+  if (dist(p, FOUNTAIN[team]) < 3000) return 'Base';
+  let best = null, bd = 1300;
+  for (const [k, c] of Object.entries(CAMPS[team])) { const d = dist(p, c); if (d < bd) { bd = d; best = k; } }
+  for (const [k, c] of Object.entries(CAMPS[enemy])) { const d = dist(p, c); if (d < bd) { bd = d; best = 'Enemy ' + k; } }
+  for (const [k, c] of Object.entries(SCUTTLE)) { const d = dist(p, c); if (d < bd) { bd = d; best = k; } }
+  if (best) return best;
+  const [x, y] = p;
+  if (x < 2200 || y > MAP - 2200) return 'Top lane';
+  if (y < 2200 || x > MAP - 2200) return 'Bot lane';
+  if (Math.abs(x - y) < 1600) return 'Mid lane';
+  if (Math.abs(x + y - MAP) < 1600) return x + y < MAP ? 'Bot river' : 'Top river';
+  if (dist(p, FOUNTAIN[enemy]) < 3000) return 'Enemy base';
+  return 'Jungle';
+}
+
+// the junglers of one match: [{champ, team, win, path: [place at 1:00, 2:00, 3:00, 4:00]}]
+export function junglePaths(match, timeline) {
+  const info = match && match.info, frames = timeline && timeline.info && timeline.info.frames;
+  if (!info || info.queueId !== 420 || !Array.isArray(frames) || frames.length < 5 || info.gameDuration < 600) return [];
+  const out = [];
+  for (const p of info.participants || []) {
+    if (p.teamPosition !== 'JUNGLE' || (p.teamId !== 100 && p.teamId !== 200)) continue;
+    const path = [1, 2, 3, 4].map(i => { const f = frames[i] && frames[i].participantFrames && frames[i].participantFrames[String(p.participantId)]; return f ? place(f.position, p.teamId) : null; });
+    if (path.some(x => !x)) continue;
+    out.push({ champ: p.championName, team: p.teamId, win: !!p.win, path });
+  }
+  return out;
+}
+
+const patchNum = p => { const [a, b] = String(p).split('.').map(Number); return a * 1000 + (b || 0); };
+const patchOf = v => (String(v || '').match(/^(\d+)\.(\d+)/) || []).slice(1, 3).join('.');
+
+// adds one match's junglers to the tally: agg.champs[norm name][side] = {n, w, start: {camp: n}, paths: {key: [n, w]}}
+export function addPaths(agg, version, rows) {
+  const patch = patchOf(version);
+  if (!patch) return agg;
+  if (!agg || agg.patch !== patch) {
+    // a new patch: start over, but keep the old tally until the new one has a few hundred games
+    if (agg && agg.patch && patchNum(patch) < patchNum(agg.patch)) return agg; // an old patch's match
+    agg = { patch, games: 0, champs: {}, prev: agg && agg.games >= 300 ? { patch: agg.patch, games: agg.games, champs: agg.champs } : (agg && agg.prev) || null };
+  }
+  agg.games++;
+  for (const r of rows) {
+    const k = norm(r.champ), side = r.team === 100 ? 'blue' : 'red';
+    const c = (agg.champs[k] ||= { name: r.champ });
+    const s = (c[side] ||= { n: 0, w: 0, start: {}, paths: {} });
+    s.n++; if (r.win) s.w++;
+    s.start[r.path[0]] = (s.start[r.path[0]] || 0) + 1;
+    const key = r.path.join('>');
+    const e = (s.paths[key] ||= [0, 0]); e[0]++; if (r.win) e[1]++;
+    const keys = Object.keys(s.paths);
+    if (keys.length > JG_TOP * 2) { keys.sort((a, b) => s.paths[b][0] - s.paths[a][0]); for (const x of keys.slice(JG_TOP)) delete s.paths[x]; }
+  }
+  if (agg.prev && agg.games >= 300) agg.prev = null;
+  return agg;
+}
+
+// what /api/jungle answers for one champion: per side the start camps and the 3 most common routes
+export function jungleView(agg, champ) {
+  const k = norm(champ), cur = agg && agg.champs && agg.champs[k], old = agg && agg.prev && agg.prev.champs && agg.prev.champs[k];
+  // each side from this patch once it has 10 games, else from the previous patch while that's kept
+  const side = which => {
+    let s = cur && cur[which], patch = agg && agg.patch;
+    if ((!s || s.n < 10) && old && old[which] && old[which].n >= 10) { s = old[which]; patch = agg.prev.patch; }
+    if (!s || s.n < 10) return null;
+    const start = Object.entries(s.start).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([camp, n]) => ({ camp, share: n / s.n }));
+    const paths = Object.entries(s.paths).sort((a, b) => b[1][0] - a[1][0]).slice(0, 3)
+      .map(([key, [n, w]]) => ({ path: key.split('>'), games: n, share: n / s.n, win: n ? w / n : 0 }));
+    return { patch, games: s.n, win: s.w / s.n, start, paths };
+  };
+  return { champion: (cur || old || {}).name || champ, patch: agg ? agg.patch : '', region: 'EUW', rank: 'Emerald+', minutes: [1, 2, 3, 4],
+    blue: side('blue'), red: side('red') };
+}
+
+class RiotLimit extends Error {}
+async function riot(env, url, state) {
+  if (state.calls >= JG_CALLS) throw new RiotLimit('budget');
+  state.calls++;
+  const r = await fetch(url, { headers: { 'X-Riot-Token': env.RIOT_KEY }, signal: AbortSignal.timeout(10000) });
+  if (r.status === 429 || r.status === 401 || r.status === 403) throw new RiotLimit(String(r.status));
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error('riot ' + r.status);
+  await new Promise(res => setTimeout(res, 120)); // stay well under 20 calls a second
+  return r.json();
+}
+
+// one cron run: top up the player list from the ranked ladder, find new matches, read as many as the budget allows
+export async function collectJungle(env, kv = env.DATA) {
+  if (!env.RIOT_KEY || !kv) return { skipped: 'no key' };
+  const st = (await kv.get('jg:state', { type: 'json' })) || { players: [], matches: [], seen: [], ladder: 0 };
+  let agg = await kv.get('jg:agg', { type: 'json' });
+  const budget = { calls: 0 }, done = { matches: 0, errors: 0 };
+  try {
+    if (st.players.length === 0 && st.matches.length < 10) {
+      const n = st.ladder++ % (JG_TIERS.length * JG_DIVS.length * 3 + JG_APEX.length);
+      let rows;
+      if (n < JG_APEX.length) {
+        const l = await riot(env, `${RIOT_PLAT}/lol/league/v4/${JG_APEX[n]}leagues/by-queue/RANKED_SOLO_5x5`, budget);
+        rows = (l && l.entries) || [];
+      } else {
+        const m = n - JG_APEX.length, tier = JG_TIERS[Math.floor(m / (JG_DIVS.length * 3)) % JG_TIERS.length];
+        const div = JG_DIVS[Math.floor(m / 3) % JG_DIVS.length], page = (m % 3) + 1;
+        rows = (await riot(env, `${RIOT_PLAT}/lol/league/v4/entries/RANKED_SOLO_5x5/${tier}/${div}?page=${page}`, budget)) || [];
+      }
+      st.players = rows.map(e => e.puuid).filter(Boolean).sort(() => Math.random() - 0.5).slice(0, 150);
+    }
+    const since = Math.floor(Date.now() / 1000) - 4 * 86400;
+    while (st.matches.length < 10 && st.players.length) {
+      const id = await riot(env, `${RIOT_REG}/lol/match/v5/matches/by-puuid/${st.players.pop()}/ids?queue=420&type=ranked&start=0&count=10&startTime=${since}`, budget);
+      for (const m of id || []) if (!st.seen.includes(m) && !st.matches.includes(m)) st.matches.push(m);
+    }
+    while (st.matches.length) {
+      const id = st.matches[st.matches.length - 1];
+      const match = await riot(env, `${RIOT_REG}/lol/match/v5/matches/${id}`, budget);
+      const tl = match ? await riot(env, `${RIOT_REG}/lol/match/v5/matches/${id}/timeline`, budget) : null;
+      st.matches.pop(); st.seen.push(id);
+      if (match && tl) { agg = addPaths(agg, match.info && match.info.gameVersion, junglePaths(match, tl)); done.matches++; }
+    }
+  } catch (e) { if (!(e instanceof RiotLimit)) done.errors++; done.stop = e.message; }
+  st.seen = st.seen.slice(-4000);
+  await kv.put('jg:state', JSON.stringify(st));
+  if (done.matches) await kv.put('jg:agg', JSON.stringify(agg));
+  return { ...done, calls: budget.calls, games: agg ? agg.games : 0 };
+}
+
 const json = (obj, status = 200, maxAge = 0) => new Response(JSON.stringify(obj), {
   status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': maxAge ? `public, max-age=${maxAge}` : 'no-store' },
 });
@@ -427,9 +577,22 @@ export default {
         return json({ error: e instanceof HttpError ? e.message : 'Something went wrong: ' + e.message }, e instanceof HttpError ? e.status : 500);
       }
     }
+    if (url.pathname === '/api/jungle') {
+      const c = url.searchParams.get('c') || '';
+      if (!c) return json({ error: 'Which champion?' }, 400);
+      try {
+        const agg = KV ? await KV.get('jg:agg', { type: 'json', cacheTtl: 300 }) : null;
+        // matches name champions by their Data Dragon id ("MonkeyKing"); accept the display name too ("Wukong")
+        let id = c;
+        try { const d = await ddragon(), hit = d.list.find(x => norm(x.name) === norm(c) || norm(x.id) === norm(c)); if (hit) id = hit.id; } catch {}
+        return json(jungleView(agg, id), 200, 600);
+      } catch (e) { return json({ error: 'Could not load jungle paths.' }, 502); }
+    }
     return new Response('Not found', { status: 404 });
   },
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(warm(env).catch(() => {}));
+    // two schedules: the build warmer every 10 minutes, the jungle path collector 5 minutes after it
+    if (event && event.cron === JG_CRON) ctx.waitUntil(collectJungle(env).catch(() => {}));
+    else ctx.waitUntil(warm(env).catch(() => {}));
   },
 };
