@@ -323,6 +323,7 @@ ok('jungle tally and view', () => {
     return { ok: false, status: 404, json: async () => ({}) };
   };
   ok('jungle collector: no key, nothing', () => {});
+  ok('riot key trimmed', () => { assert.equal(W.riotKey({ RIOT_KEY: ' "RGAPI-abc"\n' }), 'RGAPI-abc'); assert.equal(W.riotKey({}), ''); });
   assert.deepEqual(await W.collectJungle({}, KVm), { skipped: 'no key' });
   const r = await W.collectJungle({ RIOT_KEY: 'k' }, KVm);
   ok('jungle collector run', () => {

@@ -485,10 +485,12 @@ export function jungleView(agg, champ) {
 }
 
 class RiotLimit extends Error {}
+// the key as pasted into Cloudflare, without spaces, line breaks or quote marks around it
+export const riotKey = env => String(env.RIOT_KEY || '').trim().replace(/^["'`]+|["'`]+$/g, '').trim();
 async function riot(env, url, state) {
   if (state.calls >= JG_CALLS) throw new RiotLimit('budget');
   state.calls++;
-  const r = await fetch(url, { headers: { 'X-Riot-Token': env.RIOT_KEY }, signal: AbortSignal.timeout(10000) });
+  const r = await fetch(url, { headers: { 'X-Riot-Token': riotKey(env) }, signal: AbortSignal.timeout(10000) });
   if (r.status === 429 || r.status === 401 || r.status === 403) throw new RiotLimit(String(r.status));
   if (r.status === 404) return null;
   if (!r.ok) throw new Error('riot ' + r.status);
@@ -531,7 +533,8 @@ export async function collectJungle(env, kv = env.DATA) {
     }
   } catch (e) { if (!(e instanceof RiotLimit)) done.errors++; done.stop = e.message; }
   st.seen = st.seen.slice(-4000);
-  st.last = { at: new Date().toISOString(), calls: budget.calls, matches: done.matches, stop: done.stop || '', ladder: done.ladder || null }; // the last run, for checking on it
+  st.last = { at: new Date().toISOString(), calls: budget.calls, matches: done.matches, stop: done.stop || '', ladder: done.ladder || null,
+    key: { length: riotKey(env).length, looksRight: /^RGAPI-[0-9a-f-]{36}$/.test(riotKey(env)) } }; // never the key itself // the last run, for checking on it
   await kv.put('jg:state', JSON.stringify(st));
   if (done.matches) await kv.put('jg:agg', JSON.stringify(agg));
   return { ...done, calls: budget.calls, games: agg ? agg.games : 0 };
